@@ -1,0 +1,100 @@
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 01 00
+poke ENEMIES_IN_BATTLE 01 00
+poke ENEMIES_IN_BATTLE_IDS 9F 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+spam a 40 2400 BH_DP 1
+shot fo_00
+peek BH_DP+0x16 8
+run 1
+shot fo_01
+peek BH_DP+0x16 8
+run 1
+shot fo_02
+peek BH_DP+0x16 8
+run 1
+shot fo_03
+peek BH_DP+0x16 8
+run 1
+shot fo_04
+peek BH_DP+0x16 8
+run 1
+shot fo_05
+peek BH_DP+0x16 8
+run 1
+shot fo_06
+peek BH_DP+0x16 8
+run 1
+shot fo_07
+peek BH_DP+0x16 8
+run 1
+shot fo_08
+peek BH_DP+0x16 8
+run 1
+shot fo_09
+peek BH_DP+0x16 8
+run 1
+shot fo_10
+peek BH_DP+0x16 8
+run 1
+shot fo_11
+peek BH_DP+0x16 8
+run 1
+shot fo_12
+peek BH_DP+0x16 8
+run 1
+shot fo_13
+peek BH_DP+0x16 8
+run 1
+waitmem BH_DP+0x08 0 900
+shot fc_00
+peek BH_DP+0x16 8
+run 1
+shot fc_01
+peek BH_DP+0x16 8
+run 1
+shot fc_02
+peek BH_DP+0x16 8
+run 1
+shot fc_03
+peek BH_DP+0x16 8
+run 1
+shot fc_04
+peek BH_DP+0x16 8
+run 1
+shot fc_05
+peek BH_DP+0x16 8
+run 1
+shot fc_06
+peek BH_DP+0x16 8
+run 1
+shot fc_07
+peek BH_DP+0x16 8
+run 1
+shot fc_08
+peek BH_DP+0x16 8
+run 1
+shot fc_09
+peek BH_DP+0x16 8
+run 1
+shot fc_10
+peek BH_DP+0x16 8
+run 1
+shot fc_11
+peek BH_DP+0x16 8
+run 1
+shot fc_12
+peek BH_DP+0x16 8
+run 1
+shot fc_13
+peek BH_DP+0x16 8
+run 1
+shot fc_14
+peek BH_DP+0x16 8
+run 1
+shot fc_15
+peek BH_DP+0x16 8
+run 1

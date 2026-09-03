@@ -105,11 +105,18 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   driven per scanline by HDMA channel 6 (channels 0-3 belong to the battle backgrounds,
   4 to the letterbox, 5 to the swirl). The game's window registers are mirrored so they
   can be restored afterwards.
-* Sprite tiles (2.5 KB) are uploaded at the start of each phase into the first unused
-  32x32 enemy-sprite "piece" slots of OBJ VRAM, and the palette into OBJ palette 7.
+* Sprite tiles (2.5 KB) are uploaded once per battle, right after the enemy sprites are
+  loaded (screen still blanked), into the first unused 32x32 enemy-sprite "piece" slots
+  of OBJ VRAM; they are re-uploaded only if an enemy is added mid-battle. The palette
+  goes into OBJ palette 7 at each phase start. Uploading the tiles per phase overran the
+  vertical blank and produced a garbled frame.
 * RAM: the engine's direct page is a 224-byte gap after `OAM1_HIGH_TABLE` that the
   original game never used; the 32-entry bullet table sits in previously unused space at
   the end of the main RAM segment (`BH_BULLETS`). Nothing overlays game buffers.
+
+The window HDMA table is double-buffered and the window registers are only written once
+per phase: rewriting WH2/WH3 mid-frame blanks the mask until the next HDMA entry, and
+editing the live table tears.
 
 One SNES gotcha worth knowing: when more than 34 8-pixel sprite slivers share a scanline
 the PPU drops the *highest priority* sprites first, so the box border uses 16x16 side
