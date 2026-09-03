@@ -150,4 +150,9 @@ editing the live table tears.
 
 One SNES gotcha worth knowing: when more than 34 8-pixel sprite slivers share a scanline
 the PPU drops the *highest priority* sprites first, so the box border uses 16x16 side
-pieces and the heart/cursor are always written to OAM first.
+pieces, the heart/cursor are always written to OAM first, and wall rows are spaced so a
+full-width row stays under the limit.
+
+Per-frame cost: each bullet's tile, palette attribute and hit box are resolved once when
+it spawns (`BH_SET_TYPE`), so the update and render loops only add, compare and copy.
+The headless harness shows no dropped frames with a dozen bullets and three enemies.

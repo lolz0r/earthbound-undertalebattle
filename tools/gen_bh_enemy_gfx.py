@@ -6,8 +6,8 @@ tiles in src/bin/battle_sprites), rebuilds the image, and derives a 32x32 "sheet
 four 16x16 sprites in the enemy's own palette indices:
   0  the whole enemy shrunk to fit 16x16        (a "mini")
   1  the mini, mirrored
-  2  a smaller mini (12x12)
-  3  the enemy's upper half shrunk to fit 16x16 (its head)
+  2  the enemy's upper half shrunk to fit 16x16 (its head)
+  3  the head, mirrored
 Native-size crops were tried first and looked like random texture chunks for big
 enemies, so everything is a scaled-down whole (or upper half) that stays recognisable.
 At battle time the sheet is uploaded to sprite VRAM and drawn with the enemy's own
@@ -110,6 +110,9 @@ def crop(img, x0, y0, w, h):
     return [[img[y][x] if 0 <= x < W and 0 <= y < H else 0 for x in range(x0, x0 + w)] for y in range(y0, y0 + h)]
 
 def scale_to(img, box, size=16):
+    """Shrink a region to fit size x size. Each output pixel takes the most common opaque
+    colour of its source block (if at least a third of the block is opaque), so thin
+    features such as legs, arms and skateboards survive instead of dropping out."""
     x0, y0, x1, y1 = box
     w, h = x1 - x0, y1 - y0
     s = max(w, h) / size
@@ -117,9 +120,21 @@ def scale_to(img, box, size=16):
     ox, oy = (size - int(w / s)) // 2, (size - int(h / s)) // 2
     for y in range(size):
         for x in range(size):
-            sx, sy = x0 + int((x - ox) * s), y0 + int((y - oy) * s)
-            if x0 <= sx < x1 and y0 <= sy < y1:
-                out[y][x] = img[sy][sx]
+            bx0, by0 = x0 + int((x - ox) * s), y0 + int((y - oy) * s)
+            bx1, by1 = x0 + int((x - ox + 1) * s), y0 + int((y - oy + 1) * s)
+            if bx0 >= x1 or by0 >= y1 or bx1 <= x0 or by1 <= y0:
+                continue
+            bx0, by0 = max(bx0, x0), max(by0, y0)
+            bx1, by1 = min(max(bx1, bx0 + 1), x1), min(max(by1, by0 + 1), y1)
+            counts, total = {}, 0
+            for sy in range(by0, by1):
+                for sx in range(bx0, bx1):
+                    total += 1
+                    v = img[sy][sx]
+                    if v:
+                        counts[v] = counts.get(v, 0) + 1
+            if counts and sum(counts.values()) * 3 >= total:
+                out[y][x] = max(counts, key=counts.get)
     return out
 
 def mirror(sp):
@@ -189,11 +204,8 @@ def main():
             x0, y0, x1, y1 = bbox(img)
             cx = (x0 + x1) // 2
             mini = scale_to(img, (x0, y0, x1, y1))
-            small = scale_to(img, (x0, y0, x1, y1), 12)
-            small = [[0] * 2 + row + [0] * 2 for row in small]
-            small = [[0] * 16] * 2 + small + [[0] * 16] * 2
-            head = scale_to(img, (x0, y0, x1, y0 + max(8, (y1 - y0) // 2)))
-            sprites = [mini, mirror(mini), small, head]
+            head = scale_to(img, (x0, y0, x1, y0 + max(16, (y1 - y0) // 2)))
+            sprites = [mini, mirror(mini), head, mirror(head)]
         sheets.append(sheet_bytes(sprites))
         boxes.append([hitbox(s) for s in sprites])
         previews.append((eid, name, pal, sprites))
