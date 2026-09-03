@@ -11,8 +11,9 @@ byte-for-byte, and the new engine is added on top as normal source files.
 ## What changes in the game
 
 **Enemy turns.** After the usual "X attacks!" / "X used PSI Fire!" text, a white box
-with a black interior opens above the party's HP windows and the enemies slide up above
-it. The player's red heart appears in the box and a bullet pattern plays for about four
+with a black interior opens across the area between the text window and the party's HP
+windows (up to 232 by 88 pixels) while the enemies fly up off the top of the screen;
+they come back when the box closes. The player's red heart appears in the box and a bullet pattern plays for about four
 seconds. Move the heart with the d-pad (hold B or X to move slowly). Every hit is a
 short invincibility flash.
 
@@ -37,9 +38,10 @@ short invincibility flash.
 
 **Party attacks.** When Ness, Paula, Jeff or Poo perform a physical attack ("Bash",
 "Shoot"...), the box shows a red/yellow/green gauge with a reticle that sweeps right,
-bounces back left, and keeps going. Press A inside the green centre for 130% damage;
-it falls off linearly to 30% at the red ends, and dithering for four seconds whiffs at
-20%. SMAAAASH criticals still happen on top of that.
+bounces back left, and keeps going. Press A inside the green centre and the hit is a
+guaranteed SMAAAASH; anywhere else can never SMAAAASH and the damage falls off linearly
+from 100% next to the green to 30% at the red ends. Dithering for four seconds whiffs
+at 20%.
 
 The box grows out of its centre when a phase starts and shrinks away afterwards.
 
@@ -124,7 +126,10 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   the engine saves it around them.
 * `BH_RENDER` in the battle frame renderer (`C2F8F9`) appends the heart, bullets, gauge
   and box border to OAM after the enemy sprites. Enemy sprites are drawn shifted up by
-  `BH_YSHIFT` (patched into `render_battle_sprite_row.asm`).
+  `BH_YSHIFT` (patched into `render_battle_sprite_row.asm`): just above the gauge for
+  party attacks, off the top of the screen for dodge phases (`BH_CALC_YSHIFT` mode).
+* `BH_SMASH_OVERRIDE` at the top of the game's SMAAAASH check forces or forbids the
+  critical according to where the reticle was pressed.
 * The black interior is hardware window 2 masking BG1/BG2, with its left/right edges
   driven per scanline by HDMA channel 6 (channels 0-3 belong to the battle backgrounds,
   4 to the letterbox, 5 to the swirl). The game's window registers are mirrored so they

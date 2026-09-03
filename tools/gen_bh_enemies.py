@@ -81,10 +81,11 @@ def m_rise(r, t, sp):
 def m_ring(r, t, sp):
     return [f"\t\tBH_RING {t()}, {r.choice([5, 6])}, {sp - r.randint(0, 4)}", f"\t\tBH_WAIT {r.randint(70, 90)}"]
 
-def m_fan(r, t, sp):
+def m_fan(r, t, sp, w=160):
     v = sp + r.randint(-2, 4)
-    return [f"\t\tBH_SPAWN {t()}, 48, -20, {-(v // 2)}, {v}", f"\t\tBH_SPAWN {t()}, 64, -20, 0, {v}",
-            f"\t\tBH_SPAWN {t()}, 80, -20, {v // 2}, {v}", f"\t\tBH_WAIT {r.randint(50, 70)}"]
+    c = w // 2 - 8
+    return [f"\t\tBH_SPAWN {t()}, {c - 20}, -20, {-(v // 2)}, {v}", f"\t\tBH_SPAWN {t()}, {c}, -20, 0, {v}",
+            f"\t\tBH_SPAWN {t()}, {c + 20}, -20, {v // 2}, {v}", f"\t\tBH_WAIT {r.randint(50, 70)}"]
 
 def m_gatling(r, t, sp):
     e = r.choice(["BH_EDGE_LEFT", "BH_EDGE_RIGHT"])
@@ -117,11 +118,12 @@ MOVES = {
     "slime":   [m_drop, m_rain, m_rise, m_wave],           # dripping, bubbling
     "generic": [m_rain, m_aimed, m_side, m_drop, m_fan, m_burst],
 }
+# the box fills the area between the text window and the HP windows (at most 232 x 88)
 BOXES = {
-    "bird": [(160, 56), (176, 48), (152, 60)], "plant": [(160, 56), (144, 64)], "beast": [(144, 48), (160, 48), (168, 44)],
-    "insect": [(144, 64), (136, 64)], "robot": [(160, 48), (176, 48)], "ghost": [(128, 72), (120, 72)],
-    "psi": [(128, 64), (136, 64)], "person": [(144, 56), (152, 52)], "slime": [(160, 56), (152, 60)],
-    "generic": [(144, 56), (160, 48), (128, 64)],
+    "bird": [(224, 80), (232, 72)], "plant": [(208, 88), (224, 80)], "beast": [(232, 64), (224, 72)],
+    "insect": [(200, 88), (216, 80)], "robot": [(232, 72), (224, 80)], "ghost": [(176, 88), (192, 88)],
+    "psi": [(192, 88), (208, 80)], "person": [(216, 72), (224, 80)], "slime": [(208, 80), (216, 88)],
+    "generic": [(224, 80), (208, 88), (232, 72)],
 }
 
 def parse_enemies():
@@ -151,13 +153,13 @@ def program(eid, cat, boss, which, salt=0):
         return v
     w, h = r.choice(BOXES[cat])
     if boss:
-        w, h = w + 8, h + 8
+        w, h = min(232, w + 8), min(88, h + 8)
     frames = r.choice([200, 220, 240]) + (40 if boss else 0)
     lines = [f"BH_PAT_E{eid:03d}_{which}:", f"\tBH_HEADER {w}, {h}, {frames}", "\tBH_LOOP 0"]
     chosen = [moves[r.randrange(len(moves))] for _ in range(nmoves)]
     chosen[0] = moves[0] if which == "A" else moves[1]   # open with the category's signature move
     for mv in chosen:
-        lines += mv(r, t, sp)
+        lines += mv(r, t, sp, w) if mv is m_fan else mv(r, t, sp)
     lines += ["\tBH_ENDLOOP", ""]
     # the program's shape: its sequence of opcodes (so no two enemies attack the same way)
     shape = tuple(l.split()[0] for l in lines if l.startswith("\t\tBH_"))
