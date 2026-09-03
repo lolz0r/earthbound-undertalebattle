@@ -1,0 +1,34 @@
+# Spiteful Crow: its own bullet sheet should be in VRAM and used by the dodge phase
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 01 00
+poke ENEMIES_IN_BATTLE 01 00
+poke ENEMIES_IN_BATTLE_IDS 9F 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+echo sheet ids / tiles, piece tiles:
+peek BH_DP+0x80 16
+peek BH_DP+0x32 10
+spam a 40 2400 BH_DP 1
+echo enemy types, tempo, theme tile, theme pal, hitboxes, speed:
+peek BH_DP+0x64 4
+peek BH_DP+0x68 2
+peek BH_DP+0x72 2
+peek BH_DP+0x7E 2
+peek BH_DP+0x74 8
+peek BH_DP+0x2C 2
+peek BH_DP+0x1E 4
+run 40
+shot sheet_040
+run 30
+shot sheet_070
+hold left
+run 30
+shot sheet_100
+release
+run 40
+shot sheet_140
+waitmem BH_DP 0 900
+peek BH_DP+0x0A 2
+peek BATTLERS_TABLE+17 2

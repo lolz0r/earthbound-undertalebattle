@@ -1,0 +1,27 @@
+# group 36: two Runaway Dogs and a Cop -> two different sheets uploaded
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 24 00
+poke ENEMIES_IN_BATTLE 03 00
+poke ENEMIES_IN_BATTLE_IDS 79 00 79 00 36 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+shot two_battle
+peek BH_DP+0x80 16
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x72 2
+peek BH_DP+0x7E 2
+run 50
+shot two_phase1
+waitmem BH_DP 0 900
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x72 2
+peek BH_DP+0x7E 2
+run 50
+shot two_phase2
+waitmem BH_DP 0 900
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x72 2
+run 50
+shot two_phase3

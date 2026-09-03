@@ -16,7 +16,7 @@ Piece 4 ("bone"):  16x32 bone bullet pieces (two 16x16: bone top, bone shaft).
 import os, sys
 
 # palette index meanings (colour 0 = transparent)
-TRANSPARENT, WHITE, RED, BLACK, GREY, BLUE, ORANGE, GREEN, YELLOW, DARKRED, LIGHTRED, DARKGREY = range(12)
+TRANSPARENT, WHITE, RED, BLACK, GREY, BLUE, ORANGE, GREEN, YELLOW, DARKRED, LIGHTRED, DARKGREY, LIGHTGREEN, BROWN, LIGHTBLUE, PINK = range(16)
 PALETTE = [
     (0, 0, 0),        # 0 transparent
     (31, 31, 31),     # 1 white
@@ -30,7 +30,10 @@ PALETTE = [
     (18, 0, 0),       # 9 dark red (heart shading)
     (31, 14, 14),     # 10 light red (heart highlight)
     (10, 10, 10),     # 11 dark grey
-    (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0),
+    (16, 31, 12),     # 12 light green
+    (16, 8, 0),       # 13 brown
+    (18, 24, 31),     # 14 light blue
+    (31, 20, 26),     # 15 pink
 ]
 
 def bgr555(r, g, b):
@@ -241,7 +244,7 @@ def main():
         pal += bytes((v & 0xFF, v >> 8))
     with open(os.path.join(outdir, "bh_palette.bin"), "wb") as f:
         f.write(pal)
-    print(f"wrote {len(PIECES)} pieces ({len(tiles)} bytes) and palette ({len(pal)} bytes) to {outdir}")
+    print(f"wrote {len(PIECES)} pieces ({len(tiles)} bytes), palette to {outdir}")
 
 if __name__ == "__main__":
     main()

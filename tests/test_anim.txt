@@ -16,7 +16,7 @@ run 4
 shot anim_9
 peek FRAME_COUNTER 1
 peek BH_DP+0x2A 2
-waitmem BH_DP+0x08 0 900
+waitmem16 BH_DP+0x08 0 900
 peek FRAME_COUNTER 1
 peek BH_DP+0x2A 2
 run 3

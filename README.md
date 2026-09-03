@@ -19,15 +19,25 @@ short invincibility flash.
 * 0 hits: the action is skipped and "<name> dodged quickly!" is shown.
 * 1 hit: the action resolves at 40% damage. 2 hits: 70%. 3 or more: full damage.
 * Blue bullets only hurt while the heart is moving, orange ones only while it is still.
-* Bullet speed scales with the enemy's level; the pattern depends on the action type
-  (physical / piercing / PSI / other) and on the enemy, so different enemies attack
-  differently. Patterns are small bytecode programs in
-  `ebsrc/src/battle/bullet_hell/bh_patterns.asm`.
+* **Every enemy has its own attack.** Each of the 231 enemies has a dedicated pair of
+  attack programs (one for physical attacks, one for PSI and everything else) in
+  `ebsrc/src/battle/bullet_hell/bh_enemies.asm`, generated from the enemy's category
+  (birds dive from above, dogs and snakes sweep in from the sides, insects rise from
+  below, robots strafe, ghosts fire rings and blue/orange shots, bosses get everything
+  at once) with per-enemy speeds, tempo and box sizes. The generator guarantees that no
+  two programs share the same bytes or even the same sequence of moves. Bullet speed
+  also scales with the enemy's level.
+* **Every enemy shoots pieces of itself.** `tools/gen_bh_enemy_gfx.py` decodes each
+  enemy's battle sprite from the ROM and cuts four bullet sprites out of it (a mini, its
+  face, its middle, a mirrored mini). The sheets of the enemies present are uploaded to
+  sprite VRAM at the start of each battle and drawn with that enemy's own palette, so
+  a Spiteful Crow throws little crows and a Runaway Dog little dogs.
 
 **Party attacks.** When Ness, Paula, Jeff or Poo perform a physical attack ("Bash",
-"Shoot"...), the box shows a red/yellow/green gauge with a cursor sweeping across it.
-Press A near the green centre for up to 130% damage; the edges give 30%; not pressing
-at all gives 20%. SMAAAASH criticals still happen on top of that.
+"Shoot"...), the box shows a red/yellow/green gauge with a reticle that sweeps right,
+bounces back left, and keeps going. Press A inside the green centre for 130% damage;
+it falls off linearly to 30% at the red ends, and dithering for four seconds whiffs at
+20%. SMAAAASH criticals still happen on top of that.
 
 The box grows out of its centre when a phase starts and shrinks away afterwards.
 
@@ -39,16 +49,20 @@ enemy sprites, experience) is untouched.
 ```
 EarthBound (USA).sfc      original ROM (No-Intro, SHA-1 d67a8ef3...) - you supply this
 ebsrc/                    disassembly + the hack (git branch bullet-hell)
-  src/battle/bullet_hell/ bh_engine.asm (engine), bh_patterns.asm (bullet patterns),
-                          bh_data.asm (graphics/palette/type table)
-  include/bullet_hell.asm constants, direct-page layout, pattern macros
-  src/bin/bh/             generated sprite tiles + palette
+  src/battle/bullet_hell/ bh_engine.asm (engine, bank $EE), bh_data.asm (base graphics,
+                          type table), bh_enemies.asm (generated: per-enemy records,
+                          462 attack programs, hit boxes; bank $F0)
+  src/bankconfig/US/bank30-32.asm  the three new banks ($F0-$F2) of the 4 MB ROM
+  include/bullet_hell.asm constants, direct-page layout, pattern opcode macros
+  src/bin/bh/             generated: base tiles, palette, enemy bullet sheets (118 KB)
 tools/                    toolchain, all built in user space
   cc65/ ebbinex/ spcasm/ ldc2/   assembler, asset extractor, SPC assembler, D compiler
   snes9x/libretro/        headless emulator core
   harness/ebharness.c     scripted headless test runner (screenshots, RAM peek/poke,
                           save states, symbol names from the ld65 map)
-  gen_bh_gfx.py           generates src/bin/bh/*.bin from ASCII art
+  gen_bh_gfx.py           base tiles (heart, box lines, gauge, bones) from ASCII art
+  gen_bh_enemy_gfx.py     decodes every enemy's battle sprite and cuts its bullet sheet
+  gen_bh_enemies.py       writes the per-enemy records and attack programs
   env.sh                  puts the toolchain on PATH
 tests/                    harness scripts (*.txt), run.sh, captured screenshots in out/
 ```
@@ -66,7 +80,14 @@ make -j16 EXTRA="-D BH_DEBUG" BUILDDIR=build-debug # optional: debug-menu build 
 If you add or remove `.INCLUDE` lines in `src/bankconfig/`, delete the affected
 `build/US/*.dep` files first; they are only regenerated when the bank's own file changes.
 
-After changing `tools/gen_bh_gfx.py` run `python3 tools/gen_bh_gfx.py` before `make`.
+After changing a generator, re-run it before `make` (`python3 tools/gen_bh_gfx.py`,
+`python3 tools/gen_bh_enemy_gfx.py`, `python3 tools/gen_bh_enemies.py`). The ROM is
+4 MB (the original 3 MB plus banks $F0-$F2); the header already declared 4 MB.
+
+To hand-tune one enemy, edit its record and its two programs in `bh_enemies.asm`
+(each program is a few macro lines: RAIN, SIDE, AIMED, RISE, WALL, RING, SPAWN, WAIT).
+The engine reads pattern indices from the record, so an enemy can also be pointed at
+any other program.
 
 ## Testing
 
@@ -105,10 +126,11 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   driven per scanline by HDMA channel 6 (channels 0-3 belong to the battle backgrounds,
   4 to the letterbox, 5 to the swirl). The game's window registers are mirrored so they
   can be restored afterwards.
-* Sprite tiles (2.5 KB) are uploaded once per battle, right after the enemy sprites are
-  loaded (screen still blanked), into the first unused 32x32 enemy-sprite "piece" slots
-  of OBJ VRAM; they are re-uploaded only if an enemy is added mid-battle. The palette
-  goes into OBJ palette 7 at each phase start. Uploading the tiles per phase overran the
+* Sprite tiles are uploaded once per battle, right after the enemy sprites are loaded
+  (screen still blanked), into the first unused 32x32 enemy-sprite "piece" slots of OBJ
+  VRAM: five base pieces, then one sheet per enemy kind present (up to four). They are
+  re-uploaded only if an enemy is added mid-battle. Bullets cut from an enemy use the
+  OBJ palette slot of that enemy's sprite; everything else uses OBJ palette 7. Uploading the tiles per phase overran the
   vertical blank and produced a garbled frame.
 * RAM: the engine's direct page is a 224-byte gap after `OAM1_HIGH_TABLE` that the
   original game never used; the 32-entry bullet table sits in previously unused space at
