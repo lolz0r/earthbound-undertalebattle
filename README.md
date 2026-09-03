@@ -18,7 +18,8 @@ seconds. Move the heart with the d-pad (hold B or X to move slowly). Every hit i
 short invincibility flash.
 
 * Dodge everything and the action is skipped with "<name> dodged quickly!". The first
-  hit ends the phase: the box closes and the attack lands at full damage.
+  hit ends the phase: the box closes and the attack lands at full damage, bypassing the
+  game's own miss and dodge rolls (a hit in the box is always a hit).
 * Blue bullets only hurt while the heart is moving, orange ones only while it is still.
 * **Every enemy has its own attack.** Each of the 231 enemies has a dedicated pair of
   attack programs (one for physical attacks, one for PSI and everything else) in
@@ -42,9 +43,10 @@ short invincibility flash.
 **Party attacks.** When Ness, Paula, Jeff or Poo perform a physical attack ("Bash",
 "Shoot"...), the box shows a red/yellow/green gauge with a reticle that sweeps right,
 bounces back left, and keeps going. Press A inside the green centre and the hit is a
-guaranteed SMAAAASH; anywhere else can never SMAAAASH and the damage falls off linearly
-from 100% next to the green to 30% at the red ends. Dithering for four seconds whiffs
-at 20%.
+guaranteed SMAAAASH; in the yellow it always connects but never criticals, with damage
+falling linearly from 100% next to the green to 65% at the yellow's edge; in the red it
+misses 70% of the time and does 30% to 65% when it does land. Dithering for four
+seconds is a miss.
 
 The box grows out of its centre when a phase starts and shrinks away afterwards.
 
@@ -132,7 +134,10 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   `BH_YSHIFT` (patched into `render_battle_sprite_row.asm`): just above the gauge for
   party attacks, off the top of the screen for dodge phases (`BH_CALC_YSHIFT` mode).
 * `BH_SMASH_OVERRIDE` at the top of the game's SMAAAASH check forces or forbids the
-  critical according to where the reticle was pressed.
+  critical according to where the reticle was pressed; `BH_MISS_OVERRIDE` at the top of
+  `MISS_CALC` and `DETERMINE_DODGE` forces the outcome of the hit/miss rolls (always hit
+  after a dodge-phase hit or a yellow/green press, always miss for a whiff or a red
+  press that rolled a miss).
 * The black interior is hardware window 2 masking BG1/BG2, with its left/right edges
   driven per scanline by HDMA channel 6 (channels 0-3 belong to the battle backgrounds,
   4 to the letterbox, 5 to the swirl). The game's window registers are mirrored so they
