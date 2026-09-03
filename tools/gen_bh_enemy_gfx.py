@@ -5,9 +5,11 @@ For each enemy id (0-230) this reads the enemy's battle sprite (HAL-compressed 4
 tiles in src/bin/battle_sprites), rebuilds the image, and derives a 32x32 "sheet" of
 four 16x16 sprites in the enemy's own palette indices:
   0  the whole enemy shrunk to fit 16x16        (a "mini")
-  1  a 16x16 crop of the top centre (the face)
-  2  a 16x16 crop of the middle
-  3  the mini, mirrored
+  1  the mini, mirrored
+  2  a smaller mini (12x12)
+  3  the enemy's upper half shrunk to fit 16x16 (its head)
+Native-size crops were tried first and looked like random texture chunks for big
+enemies, so everything is a scaled-down whole (or upper half) that stays recognisable.
 At battle time the sheet is uploaded to sprite VRAM and drawn with the enemy's own
 OBJ palette, so the bullets are literally pieces of that enemy.
 
@@ -187,9 +189,11 @@ def main():
             x0, y0, x1, y1 = bbox(img)
             cx = (x0 + x1) // 2
             mini = scale_to(img, (x0, y0, x1, y1))
-            face = crop(img, cx - 8, y0, 16, 16)
-            mid = crop(img, cx - 8, (y0 + y1) // 2 - 8, 16, 16)
-            sprites = [mini, face, mid, mirror(mini)]
+            small = scale_to(img, (x0, y0, x1, y1), 12)
+            small = [[0] * 2 + row + [0] * 2 for row in small]
+            small = [[0] * 16] * 2 + small + [[0] * 16] * 2
+            head = scale_to(img, (x0, y0, x1, y0 + max(8, (y1 - y0) // 2)))
+            sprites = [mini, mirror(mini), small, head]
         sheets.append(sheet_bytes(sprites))
         boxes.append([hitbox(s) for s in sprites])
         previews.append((eid, name, pal, sprites))

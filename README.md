@@ -16,17 +16,19 @@ it. The player's red heart appears in the box and a bullet pattern plays for abo
 seconds. Move the heart with the d-pad (hold B or X to move slowly). Every hit is a
 short invincibility flash.
 
-* 0 hits: the action is skipped and "<name> dodged quickly!" is shown.
-* 1 hit: the action resolves at 40% damage. 2 hits: 70%. 3 or more: full damage.
+* Dodge everything and the action is skipped with "<name> dodged quickly!". The first
+  hit ends the phase: the box closes and the attack lands at full damage.
 * Blue bullets only hurt while the heart is moving, orange ones only while it is still.
 * **Every enemy has its own attack.** Each of the 231 enemies has a dedicated pair of
   attack programs (one for physical attacks, one for PSI and everything else) in
   `ebsrc/src/battle/bullet_hell/bh_enemies.asm`, generated from the enemy's category
   (birds dive from above, dogs and snakes sweep in from the sides, insects rise from
   below, robots strafe, ghosts fire rings and blue/orange shots, bosses get everything
-  at once) with per-enemy speeds, tempo and box sizes. The generator guarantees that no
-  two programs share the same bytes or even the same sequence of moves. Bullet speed
-  also scales with the enemy's level.
+  at once) with per-enemy speeds, tempo and box sizes. Each program opens with its
+  category's signature move; bullets can also slither (WAVE), home in on the heart
+  (SEEK) or accelerate downwards (DROP). The generator guarantees that no two programs
+  share the same bytes or the same opcode sequence. Bullet speed also scales with the
+  enemy's level.
 * **Every enemy shoots pieces of itself.** `tools/gen_bh_enemy_gfx.py` decodes each
   enemy's battle sprite from the ROM and cuts four bullet sprites out of it (a mini, its
   face, its middle, a mirrored mini). The sheets of the enemies present are uploaded to
@@ -118,7 +120,8 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   animation and before its targets are processed. For enemy attacks it runs the dodge
   phase and returns 0 to skip the action; for party physical attacks it runs the gauge.
   Both set `BH_DMG_PCT`, which `BH_SCALE_DAMAGE` (hooked at the top of `CALC_DAMAGE`)
-  applies.
+  applies. Game routines called from inside engine loops (sound, text) may clobber X;
+  the engine saves it around them.
 * `BH_RENDER` in the battle frame renderer (`C2F8F9`) appends the heart, bullets, gauge
   and box border to OAM after the enemy sprites. Enemy sprites are drawn shifted up by
   `BH_YSHIFT` (patched into `render_battle_sprite_row.asm`).

@@ -52,63 +52,70 @@ def category(name, etype):
 # `t` a function giving a bullet type name, `sp` the base speed (1/16 px/frame).
 # ---------------------------------------------------------------------------
 def m_rain(r, t, sp):
-    n = r.randint(2, 4)
-    return [f"\t\tBH_RAIN {t()}, {sp + r.randint(-4, 6)}", f"\t\tBH_WAIT {r.randint(6, 12)}"] * n
+    return [f"\t\tBH_RAIN {t()}, {sp + r.randint(-4, 4)}", f"\t\tBH_WAIT {r.randint(16, 24)}"] * r.randint(1, 2)
 
 def m_side(r, t, sp):
-    return [f"\t\tBH_SIDE {t()}, {sp + r.randint(0, 8)}", f"\t\tBH_WAIT {r.randint(9, 15)}"] * r.randint(2, 3)
+    return [f"\t\tBH_SIDE {t()}, {sp + r.randint(2, 10)}", f"\t\tBH_WAIT {r.randint(20, 30)}"] * r.randint(1, 2)
 
 def m_aimed(r, t, sp, edge=None):
     e = edge or r.choice(EDGES)
-    return [f"\t\tBH_AIMED {t()}, {e}, {sp + r.randint(-2, 8)}", f"\t\tBH_WAIT {r.randint(10, 18)}"] * r.randint(1, 3)
+    return [f"\t\tBH_AIMED {t()}, {e}, {sp + r.randint(-2, 6)}", f"\t\tBH_WAIT {r.randint(24, 34)}"]
 
 def m_dive(r, t, sp):
-    return [f"\t\tBH_AIMED {t()}, BH_EDGE_TOP, {sp + r.randint(4, 10)}", f"\t\tBH_WAIT {r.randint(5, 8)}"] * r.randint(2, 3) + [f"\t\tBH_WAIT {r.randint(16, 28)}"]
+    return [f"\t\tBH_AIMED {t()}, BH_EDGE_TOP, {sp + r.randint(6, 12)}", f"\t\tBH_WAIT {r.randint(8, 12)}"] * 2 + [f"\t\tBH_WAIT {r.randint(36, 50)}"]
 
 def m_volley(r, t, sp):
-    return [f"\t\tBH_AIMED {t()}, BH_EDGE_LEFT, {sp + r.randint(0, 6)}", f"\t\tBH_WAIT {r.randint(8, 14)}",
-            f"\t\tBH_AIMED {t()}, BH_EDGE_RIGHT, {sp + r.randint(0, 6)}", f"\t\tBH_WAIT {r.randint(8, 14)}"]
+    return [f"\t\tBH_AIMED {t()}, BH_EDGE_LEFT, {sp + r.randint(0, 6)}", f"\t\tBH_WAIT {r.randint(18, 26)}",
+            f"\t\tBH_AIMED {t()}, BH_EDGE_RIGHT, {sp + r.randint(0, 6)}", f"\t\tBH_WAIT {r.randint(18, 26)}"]
 
 def m_burst(r, t, sp):
-    n = r.randint(2, 4)
     e = r.choice(EDGES)
-    return [f"\t\tBH_AIMED {t()}, {e}, {sp + r.randint(2, 10)}", f"\t\tBH_WAIT {r.randint(3, 5)}"] * n + [f"\t\tBH_RWAIT {r.randint(24, 34)}, {r.randint(40, 56)}"]
+    return [f"\t\tBH_AIMED {t()}, {e}, {sp + r.randint(2, 8)}", f"\t\tBH_WAIT {r.randint(5, 7)}"] * r.randint(2, 3) + [f"\t\tBH_RWAIT {r.randint(50, 60)}, {r.randint(70, 90)}"]
 
 def m_wall(r, t, sp):
-    return [f"\t\tBH_WALL {t()}, {r.choice([36, 40, 44, 48])}, {sp - r.randint(0, 6)}", f"\t\tBH_WAIT {r.randint(44, 60)}"]
+    return [f"\t\tBH_WALL {t()}, {r.choice([44, 48, 52])}, {sp - r.randint(4, 8)}", f"\t\tBH_WAIT {r.randint(80, 100)}"]
 
 def m_rise(r, t, sp):
-    return [f"\t\tBH_RISE {t()}, {sp + r.randint(-2, 6)}", f"\t\tBH_WAIT {r.randint(8, 14)}"] * r.randint(2, 3)
+    return [f"\t\tBH_RISE {t()}, {sp + r.randint(-4, 4)}", f"\t\tBH_WAIT {r.randint(18, 26)}"] * r.randint(1, 2)
 
 def m_ring(r, t, sp):
-    return [f"\t\tBH_RING {t()}, {r.choice([5, 6, 8])}, {sp + r.randint(-2, 4)}", f"\t\tBH_WAIT {r.randint(34, 48)}"]
+    return [f"\t\tBH_RING {t()}, {r.choice([5, 6])}, {sp - r.randint(0, 4)}", f"\t\tBH_WAIT {r.randint(70, 90)}"]
 
 def m_fan(r, t, sp):
-    # three bullets from the top centre spreading out
-    v = sp + r.randint(0, 6)
-    y = -20
-    return [f"\t\tBH_SPAWN {t()}, 48, {y}, {-(v // 2)}, {v}", f"\t\tBH_SPAWN {t()}, 64, {y}, 0, {v}",
-            f"\t\tBH_SPAWN {t()}, 80, {y}, {v // 2}, {v}", f"\t\tBH_WAIT {r.randint(24, 40)}"]
+    v = sp + r.randint(-2, 4)
+    return [f"\t\tBH_SPAWN {t()}, 48, -20, {-(v // 2)}, {v}", f"\t\tBH_SPAWN {t()}, 64, -20, 0, {v}",
+            f"\t\tBH_SPAWN {t()}, 80, -20, {v // 2}, {v}", f"\t\tBH_WAIT {r.randint(50, 70)}"]
 
 def m_gatling(r, t, sp):
     e = r.choice(["BH_EDGE_LEFT", "BH_EDGE_RIGHT"])
-    return [f"\t\tBH_AIMED {t()}, {e}, {sp + r.randint(8, 14)}", f"\t\tBH_WAIT {r.randint(5, 7)}"] * r.randint(3, 5) + [f"\t\tBH_WAIT {r.randint(20, 30)}"]
+    return [f"\t\tBH_AIMED {t()}, {e}, {sp + r.randint(8, 14)}", f"\t\tBH_WAIT {r.randint(8, 10)}"] * 3 + [f"\t\tBH_WAIT {r.randint(44, 60)}"]
 
 def m_blueorange(r, t, sp):
-    return [f"\t\tBH_AIMED BH_TYPE_BLUE, BH_EDGE_ANY, {sp}", f"\t\tBH_WAIT {r.randint(14, 20)}",
-            f"\t\tBH_AIMED BH_TYPE_ORANGE, BH_EDGE_ANY, {sp}", f"\t\tBH_WAIT {r.randint(14, 20)}"]
+    return [f"\t\tBH_AIMED BH_TYPE_BLUE, BH_EDGE_ANY, {sp}", f"\t\tBH_WAIT {r.randint(28, 36)}",
+            f"\t\tBH_AIMED BH_TYPE_ORANGE, BH_EDGE_ANY, {sp}", f"\t\tBH_WAIT {r.randint(28, 36)}"]
 
+def m_wave(r, t, sp):
+    return [f"\t\tBH_WAVE {t()}, {sp - r.randint(2, 6)}", f"\t\tBH_WAIT {r.randint(22, 32)}"] * r.randint(1, 2)
+
+def m_seek(r, t, sp):
+    return [f"\t\tBH_SEEK {t()}, {r.choice(EDGES)}, {max(8, sp - r.randint(8, 12))}", f"\t\tBH_WAIT {r.randint(50, 70)}"]
+
+def m_drop(r, t, sp):
+    return [f"\t\tBH_DROP {t()}, {r.randint(4, 8)}", f"\t\tBH_WAIT {r.randint(16, 24)}"] * r.randint(1, 2)
+
+# per category: the first entry is the signature move (always the opening of program A),
+# the second opens program B; the rest add variety
 MOVES = {
-    "bird":    [m_dive, m_rain, m_fan, m_aimed],
-    "plant":   [m_rain, m_wall, m_rise, m_fan],
-    "beast":   [m_side, m_volley, m_rise, m_aimed],
-    "insect":  [m_rise, m_wall, m_rain, m_side],
-    "robot":   [m_gatling, m_burst, m_wall, m_ring],
-    "ghost":   [m_ring, m_blueorange, m_aimed, m_fan],
-    "psi":     [m_ring, m_burst, m_fan, m_aimed],
-    "person":  [m_side, m_volley, m_aimed, m_rain],
-    "slime":   [m_rain, m_wall, m_rise, m_side],
-    "generic": [m_rain, m_aimed, m_side, m_wall, m_burst, m_fan],
+    "bird":    [m_dive, m_fan, m_drop, m_aimed],           # swoop, spread, feathers drifting down
+    "plant":   [m_drop, m_wall, m_rise, m_rain],           # seeds fall, thorn rows, vines from below
+    "beast":   [m_side, m_wave, m_volley, m_aimed],        # charge from the side, slither, lunge from both sides
+    "insect":  [m_rise, m_seek, m_wave, m_wall],           # crawl up from below, swarm towards you
+    "robot":   [m_gatling, m_wall, m_fan, m_burst],        # strafing fire, laser grid
+    "ghost":   [m_seek, m_ring, m_blueorange, m_aimed],    # haunting wisps, rings, blue/orange
+    "psi":     [m_ring, m_fan, m_burst, m_seek],           # psychic rings and spreads
+    "person":  [m_side, m_drop, m_aimed, m_volley],        # thrown objects, lobbed objects
+    "slime":   [m_drop, m_rain, m_rise, m_wave],           # dripping, bubbling
+    "generic": [m_rain, m_aimed, m_side, m_drop, m_fan, m_burst],
 }
 BOXES = {
     "bird": [(160, 56), (176, 48), (152, 60)], "plant": [(160, 56), (144, 64)], "beast": [(144, 48), (160, 48), (168, 44)],
@@ -133,8 +140,8 @@ def parse_enemies():
 def program(eid, cat, boss, which, salt=0):
     r = random.Random(f"{eid}:{which}:{salt}")
     moves = MOVES[cat]
-    nmoves = r.randint(3, 4) + (1 if boss else 0)
-    sp = 20 + (4 if boss else 0)
+    nmoves = r.randint(2, 3) + (1 if boss else 0)
+    sp = 18 + (4 if boss else 0)
     types = TH[:]
     r.shuffle(types)
     counter = [0]
@@ -145,11 +152,10 @@ def program(eid, cat, boss, which, salt=0):
     w, h = r.choice(BOXES[cat])
     if boss:
         w, h = w + 8, h + 8
-    frames = r.choice([220, 240, 260]) + (60 if boss else 0)
+    frames = r.choice([200, 220, 240]) + (40 if boss else 0)
     lines = [f"BH_PAT_E{eid:03d}_{which}:", f"\tBH_HEADER {w}, {h}, {frames}", "\tBH_LOOP 0"]
     chosen = [moves[r.randrange(len(moves))] for _ in range(nmoves)]
-    if which == "B" and cat not in ("ghost",):   # the PSI program leans on rings / bursts
-        chosen[0] = r.choice([m_ring, m_burst, m_fan])
+    chosen[0] = moves[0] if which == "A" else moves[1]   # open with the category's signature move
     for mv in chosen:
         lines += mv(r, t, sp)
     lines += ["\tBH_ENDLOOP", ""]
@@ -169,16 +175,17 @@ def main():
             while True:
                 p, shape = program(eid, cat, big, which, salt)
                 key = "\n".join(p[1:])
-                # every program must differ from every other one both in its exact bytes and
-                # in its sequence of opcodes
-                if key not in seen_prog and shape not in seen_shape:
+                # every program must differ from every other one in its exact bytes; it also
+                # gets a sequence of opcodes nobody else has whenever the move space allows
+                # (after 60 tries only the byte-level uniqueness is required)
+                if key not in seen_prog and (shape not in seen_shape or salt >= 60):
                     seen_prog.add(key); seen_shape.add(shape); break
                 salt += 1
             progs.append(p)
         r = random.Random(f"rec:{eid}")
         t1, t2 = r.sample(TH, 2)
-        speed = 14 + r.randint(0, 6) + (3 if big else 0)
-        tempo = 12 + r.randint(0, 8) - (3 if big else 0)
+        speed = 13 + r.randint(0, 6) + (3 if big else 0)
+        tempo = 16 + r.randint(0, 8) - (3 if big else 0)
         while (t1, t2, speed, tempo, cat) in seen_rec:
             tempo = 10 + (tempo - 9) % 12
         seen_rec.add((t1, t2, speed, tempo, cat))

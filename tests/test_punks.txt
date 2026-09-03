@@ -1,0 +1,36 @@
+# group 11: Skate Punk (64), Yes Man Junior (129), Pogo Punk (134)
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 0B 00
+poke ENEMIES_IN_BATTLE 03 00
+poke ENEMIES_IN_BATTLE_IDS 40 00 81 00 86 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+peek BH_DP+0x80 16
+peek BH_DP+0x32 10
+peek CURRENT_BATTLE_SPRITEMAPS_ALLOCATED 2
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x72 2
+peek BH_DP+0x7E 2
+peek BH_DP+0x64 4
+run 60
+shot punk_1a
+run 40
+shot punk_1b
+peek BH_BULLETS 96
+waitmem BH_DP 0 900
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x72 2
+peek BH_DP+0x7E 2
+run 60
+shot punk_2a
+run 40
+shot punk_2b
+waitmem BH_DP 0 900
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x72 2
+run 60
+shot punk_3a
+run 40
+shot punk_3b

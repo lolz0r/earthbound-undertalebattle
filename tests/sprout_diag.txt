@@ -1,0 +1,18 @@
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 29 00
+poke ENEMIES_IN_BATTLE 02 00
+poke ENEMIES_IN_BATTLE_IDS 07 00 09 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+spam a 40 2400 BH_DP 1
+peek BH_DP+0x64 6
+peek BH_DP+0x72 2
+peek BH_DP+0x1E 4
+run 100
+shot sprout_100
+peek BH_BULLETS 192
+run 25
+shot sprout_125
+peek BH_BULLETS 192
