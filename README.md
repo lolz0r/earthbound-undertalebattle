@@ -30,11 +30,14 @@ short invincibility flash.
   (SEEK) or accelerate downwards (DROP). The generator guarantees that no two programs
   share the same bytes or the same opcode sequence. Bullet speed also scales with the
   enemy's level.
-* **Every enemy shoots pieces of itself.** `tools/gen_bh_enemy_gfx.py` decodes each
-  enemy's battle sprite from the ROM and cuts four bullet sprites out of it (a mini, its
-  face, its middle, a mirrored mini). The sheets of the enemies present are uploaded to
-  sprite VRAM at the start of each battle and drawn with that enemy's own palette, so
-  a Spiteful Crow throws little crows and a Runaway Dog little dogs.
+* **Every enemy shoots copies of itself.** `tools/gen_bh_enemy_gfx.py` decodes each
+  enemy's battle sprite from the ROM and shrinks it into bullets: 32x32 enemies get four
+  16x16 minis (whole, mirrored, head, mirrored head); bigger enemies get one 32x32
+  bullet (the whole enemy at half size) drawn with the hardware's 32x32 sprite size and
+  mirrored for the odd bullet types. Shrinking uses majority-colour sampling so thin
+  parts survive. The sheets of the enemies present are uploaded to sprite VRAM at the
+  start of each battle and drawn with that enemy's own palette, so a Spiteful Crow
+  throws little crows and a Skate Punk throws skate punks.
 
 **Party attacks.** When Ness, Paula, Jeff or Poo perform a physical attack ("Bash",
 "Shoot"...), the box shows a red/yellow/green gauge with a reticle that sweeps right,

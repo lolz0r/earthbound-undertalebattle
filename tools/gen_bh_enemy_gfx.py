@@ -140,18 +140,22 @@ def scale_to(img, box, size=16):
 def mirror(sp):
     return [row[::-1] for row in sp]
 
-def hitbox(sp):
+def hitbox(sp, big=False):
     x0, y0, x1, y1 = bbox(sp)
-    hw = max(1, min(6, (x1 - x0) // 2 - 1))
-    hh = max(1, min(6, (y1 - y0) // 2 - 1))
-    return hw, hh
+    lim = 13 if big else 6
+    hw = max(1, min(lim, (x1 - x0) // 2 - 1))
+    hh = max(1, min(lim, (y1 - y0) // 2 - 1))
+    return (hw | 0x80, hh) if big else (hw, hh)   # bit 7 of the width flags a 32x32 bullet
 
 def sheet_bytes(sprites):
-    piece = [[0] * 32 for _ in range(32)]
-    for i, sp in enumerate(sprites):
-        ox, oy = (i % 2) * 16, (i // 2) * 16
-        for y in range(16):
-            piece[oy + y][ox:ox + 16] = sp[y]
+    if len(sprites) == 1:          # one 32x32 sprite fills the whole piece
+        piece = sprites[0]
+    else:
+        piece = [[0] * 32 for _ in range(32)]
+        for i, sp in enumerate(sprites):
+            ox, oy = (i % 2) * 16, (i // 2) * 16
+            for y in range(16):
+                piece[oy + y][ox:ox + 16] = sp[y]
     out = bytearray()
     for tr in range(4):
         for tc in range(4):
@@ -203,11 +207,17 @@ def main():
             img = cache[idx]
             x0, y0, x1, y1 = bbox(img)
             cx = (x0 + x1) // 2
-            mini = scale_to(img, (x0, y0, x1, y1))
-            head = scale_to(img, (x0, y0, x1, y0 + max(16, (y1 - y0) // 2)))
-            sprites = [mini, mirror(mini), head, mirror(head)]
+            if max(x1 - x0, y1 - y0) > 32:
+                # big enemy: one 32x32 bullet, the whole enemy shrunk 2x (4x for 128 px sprites);
+                # the engine draws it as a 32x32 sprite and flips it for the odd bullet types
+                big = scale_to(img, (x0, y0, x1, y1), 32)
+                sprites = [big]
+            else:
+                mini = scale_to(img, (x0, y0, x1, y1))
+                head = scale_to(img, (x0, y0, x1, y0 + max(16, (y1 - y0) // 2)))
+                sprites = [mini, mirror(mini), head, mirror(head)]
         sheets.append(sheet_bytes(sprites))
-        boxes.append([hitbox(s) for s in sprites])
+        boxes.append([hitbox(s, len(sprites) == 1) for s in sprites] * (4 if len(sprites) == 1 else 1))
         previews.append((eid, name, pal, sprites))
     outdir = os.path.join(ROOT, "src", "bin", "bh")
     os.makedirs(outdir, exist_ok=True)
@@ -224,13 +234,13 @@ def main():
         from PIL import Image
         ids = [int(a) for a in sys.argv[2:]] or [159, 81, 1, 121, 55, 93, 2, 34, 9, 32, 150, 88]
         cell = 16 * 3
-        im = Image.new("RGB", (len(ids) * (4 * cell + 8), cell + 4), (40, 40, 40))
+        im = Image.new("RGB", (len(ids) * (4 * cell + 8), 2 * cell + 4), (40, 40, 40))
         for k, eid in enumerate(ids):
             _, name, pal, sprites = previews[eid]
             cols = load_palette(pal)
             for i, sp in enumerate(sprites):
-                for y in range(16):
-                    for x in range(16):
+                for y in range(len(sp)):
+                    for x in range(len(sp[0])):
                         v = sp[y][x]
                         if v:
                             for dy in range(3):
