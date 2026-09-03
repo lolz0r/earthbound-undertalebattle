@@ -17,3 +17,4 @@ tools/harness/libretro.h
 # the disassembly is its own git repository (branch bullet-hell)
 ebsrc/
 __pycache__/
+*.0[0-9][0-9]
