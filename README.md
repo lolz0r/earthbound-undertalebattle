@@ -29,6 +29,8 @@ short invincibility flash.
 Press A near the green centre for up to 130% damage; the edges give 30%; not pressing
 at all gives 20%. SMAAAASH criticals still happen on top of that.
 
+The box grows out of its centre when a phase starts and shrinks away afterwards.
+
 Everything else (menus, PSI, items, status effects, the rolling HP meter, backgrounds,
 enemy sprites, experience) is untouched.
 
@@ -80,7 +82,9 @@ are plain text: `run N`, `press a 6`, `hold right`, `poke SYMBOL 01 00`,
   state and captures the dodge phase. `tests/test_fight.txt` does the same with the
   party first to capture the FIGHT gauge. `tests/test_dodge.txt`, `test_multi.txt`
   and `test_collision.txt` cover the "dodged everything" path, three enemies, and the
-  overworld collision cache after a battle.
+  overworld collision cache after a battle. `test_full_battle.txt` plays a battle to its
+  end, `test_anim.txt` captures the box animation and checks that the phase runs at one
+  game frame per tick.
 
 A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTLE`,
 `ENEMIES_IN_BATTLE_IDS`, `BATTLE_INITIATIVE` (2 = enemies first) and `BATTLE_MODE`
