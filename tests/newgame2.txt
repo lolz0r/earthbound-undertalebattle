@@ -1,0 +1,65 @@
+run 2600
+spam start 30 500
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+run 60
+shot dc_00
+press down 6
+run 14
+press down 6
+run 14
+press down 6
+run 14
+press down 6
+run 14
+press down 6
+run 14
+shot dc_01
+press a 6
+run 120
+shot dc_02
+press a 6
+run 120
+shot dc_03
+press a 6
+run 120
+shot dc_04
+press a 6
+run 120
+shot dc_05
+press a 6
+run 120
+shot dc_06
+press a 6
+run 120
+shot dc_07
+press a 6
+run 120
+shot dc_08
+press a 6
+run 120
+shot dc_09
+press a 6
+run 120
+shot dc_10
+press a 6
+run 120
+shot dc_11
+press a 6
+run 120
+shot dc_12
+press a 6
+run 120
+shot dc_13
+press a 6
+run 120
+shot dc_14
+press a 6
+run 120
+shot dc_15

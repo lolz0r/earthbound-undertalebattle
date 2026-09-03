@@ -1,0 +1,26 @@
+run 3000
+press start 8
+run 120
+shot fs_0000
+run 150
+shot fs_0150
+run 150
+shot fs_0300
+run 150
+shot fs_0450
+run 150
+shot fs_0600
+run 150
+shot fs_0750
+run 150
+shot fs_0900
+run 150
+shot fs_1050
+run 150
+shot fs_1200
+run 150
+shot fs_1350
+run 150
+shot fs_1500
+run 150
+shot fs_1650

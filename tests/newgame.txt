@@ -1,0 +1,41 @@
+run 2600
+spam start 30 500
+press a 6
+run 120
+shot ng_00
+press a 6
+run 120
+shot ng_01
+press a 6
+run 120
+shot ng_02
+press a 6
+run 120
+shot ng_03
+press a 6
+run 120
+shot ng_04
+press a 6
+run 120
+shot ng_05
+press a 6
+run 120
+shot ng_06
+press a 6
+run 120
+shot ng_07
+press a 6
+run 120
+shot ng_08
+press a 6
+run 120
+shot ng_09
+press a 6
+run 120
+shot ng_10
+press a 6
+run 120
+shot ng_11
+press a 6
+run 120
+shot ng_12

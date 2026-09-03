@@ -1,0 +1,15 @@
+# Play a whole Spiteful Crow battle with A mashing (enemies first); make sure it ends cleanly
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 01 00
+poke ENEMIES_IN_BATTLE 02 00
+poke ENEMIES_IN_BATTLE_IDS 9F 00 9F 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+spam a 40 9000 BATTLE_MODE_FLAG 0
+peek BATTLERS_TABLE+17 2
+peek BATTLERS_TABLE+641 2
+run 200
+shot full_end
+peek GAME_STATE 4

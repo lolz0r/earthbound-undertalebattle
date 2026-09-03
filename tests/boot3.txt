@@ -1,0 +1,23 @@
+run 2600
+spam start 30 150
+shot st_2750
+spam start 30 150
+shot st_2900
+spam start 30 150
+shot st_3050
+spam start 30 150
+shot st_3200
+spam start 30 150
+shot st_3350
+spam start 30 150
+shot st_3500
+spam start 30 150
+shot st_3650
+spam start 30 150
+shot st_3800
+spam start 30 150
+shot st_3950
+spam start 30 150
+shot st_4100
+spam start 30 150
+shot st_4250

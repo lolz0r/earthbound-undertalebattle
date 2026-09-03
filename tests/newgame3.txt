@@ -1,0 +1,63 @@
+run 2600
+spam start 30 500
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+run 200
+shot dd_00
+press down 8
+run 20
+shot dd_down0
+press down 8
+run 20
+shot dd_down1
+press down 8
+run 20
+shot dd_down2
+press down 8
+run 20
+shot dd_down3
+press down 8
+run 20
+shot dd_down4
+press a 8
+run 150
+shot dd_02
+press a 8
+run 150
+shot dd_03
+press a 8
+run 150
+shot dd_04
+press a 8
+run 150
+shot dd_05
+press a 8
+run 150
+shot dd_06
+press a 8
+run 150
+shot dd_07
+press a 8
+run 150
+shot dd_08
+press a 8
+run 150
+shot dd_09
+press a 8
+run 150
+shot dd_10
+press a 8
+run 150
+shot dd_11
+press a 8
+run 150
+shot dd_12
+press a 8
+run 150
+shot dd_13

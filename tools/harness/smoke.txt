@@ -1,0 +1,8 @@
+run 300
+shot smoke_300
+run 600
+shot smoke_900
+press start 4
+run 200
+shot smoke_1100
+fps

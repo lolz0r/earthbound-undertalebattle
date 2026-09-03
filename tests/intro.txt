@@ -1,0 +1,203 @@
+run 2600
+spam start 30 500
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+run 150
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_0
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_1
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_2
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_3
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_4
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_5
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_6
+press a 8
+run 150
+spam a 90 600
+shot intro_00
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_01
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_02
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_03
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_04
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_05
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_06
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_07
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_08
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_09
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_10
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_11
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_12
+peek GAME_STATE+0 4
+spam a 90 600
+shot intro_13
+peek GAME_STATE+0 4
+save after_intro

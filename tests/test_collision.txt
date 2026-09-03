@@ -1,0 +1,23 @@
+load after_intro
+run 30
+echo collision buffer before battle:
+peek LOADED_COLLISION_TILES 48
+poke CURRENT_BATTLE_GROUP 01 00
+poke ENEMIES_IN_BATTLE 01 00
+poke ENEMIES_IN_BATTLE_IDS 9F 00
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+run 300
+spam a 40 2400 BH_DP 1
+waitmem BH_DP 0 900
+echo collision buffer during battle (bullets overlay):
+peek LOADED_COLLISION_TILES 48
+spam a 40 6000 BATTLE_MODE_FLAG 0
+run 300
+shot coll_after_battle
+echo collision buffer after battle:
+peek LOADED_COLLISION_TILES 48
+hold left
+run 120
+release
+shot coll_walked

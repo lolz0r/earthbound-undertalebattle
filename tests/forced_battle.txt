@@ -1,0 +1,44 @@
+hold down+l
+run 240
+release
+run 60
+poke DEBUG_MENU_CURSOR_POSITION 02 00
+run 5
+press a 6
+run 400
+shot fb_000
+poke CURRENT_BATTLE_GROUP 01 00
+poke BATTLE_MODE FF FF
+run 300
+shot fb_001
+peek BATTLE_MODE_FLAG 1
+peek BATTLE_MODE 2
+spam a 40 3000 BH_DP 1
+peek BH_DP 96
+shot fb_start
+run 10
+shot fb_010
+hold right
+run 30
+peek BH_DP 96
+shot fb_040
+hold up
+run 30
+shot fb_070
+hold left
+run 30
+shot fb_100
+release
+run 40
+peek BH_DP 96
+shot fb_140
+run 60
+shot fb_200
+waitmem BH_DP 0 600
+peek BH_DP 96
+shot fb_end
+run 90
+shot fb_after
+run 120
+shot fb_after2
+peek BATTLERS_TABLE+17 4

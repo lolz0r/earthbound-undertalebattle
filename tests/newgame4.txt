@@ -1,0 +1,67 @@
+run 2600
+spam start 30 500
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+run 150
+press a 8
+run 90
+shot de_kb
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+shot de_cursor
+press a 8
+run 150
+shot de_02
+press a 8
+run 150
+shot de_03
+press a 8
+run 150
+shot de_04
+press a 8
+run 150
+shot de_05
+press a 8
+run 150
+shot de_06
+press a 8
+run 150
+shot de_07
+press a 8
+run 150
+shot de_08
+press a 8
+run 150
+shot de_09
+press a 8
+run 150
+shot de_10
+press a 8
+run 150
+shot de_11
+press a 8
+run 150
+shot de_12
+press a 8
+run 150
+shot de_13
+press a 8
+run 150
+shot de_14
+press a 8
+run 150
+shot de_15

@@ -1,0 +1,182 @@
+run 2600
+spam start 30 500
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+press a 6
+run 90
+run 150
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_0
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_1
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_2
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_3
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_4
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_5
+press a 8
+run 90
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press down 8
+run 20
+press a 8
+run 40
+press right 8
+run 20
+press right 8
+run 20
+press a 8
+run 150
+shot nm_6
+press a 8
+run 150
+shot nm_end0
+press a 8
+run 150
+shot nm_end1
+press a 8
+run 150
+shot nm_end2
+press a 8
+run 150
+shot nm_end3
+press a 8
+run 150
+shot nm_end4
+press a 8
+run 150
+shot nm_end5
+press a 8
+run 150
+shot nm_end6
+press a 8
+run 150
+shot nm_end7

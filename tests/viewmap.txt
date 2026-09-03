@@ -1,0 +1,20 @@
+hold down+l
+run 240
+release
+run 60
+poke DEBUG_MENU_CURSOR_POSITION 01 00
+run 5
+press a 6
+run 400
+shot vm_000
+peek BATTLE_MODE 2
+peek CURRENT_BATTLE_GROUP 2
+poke CURRENT_BATTLE_GROUP 01 00
+poke BATTLE_MODE 01 00
+run 200
+shot vm_001
+peek BATTLE_MODE_FLAG 1
+run 400
+shot vm_002
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2

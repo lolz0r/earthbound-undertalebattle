@@ -1,0 +1,13 @@
+hold down+l
+run 240
+release
+run 60
+poke DEBUG_MENU_CURSOR_POSITION 04 00
+run 5
+press a 6
+run 500
+echo enemy battler 8 (offset 624): id, sprite(+2), consciousness(+12), ally(+14), hp(+17), sprite_x(+68) sprite_y(+69)
+peek BATTLERS_TABLE+624 78
+peek CURRENT_ATTACKER 2
+peek CURRENT_TARGET 2
+shot peek_battle

@@ -1,0 +1,25 @@
+# Boot with Down+L held to enter the debug menu, pick "5 SHOW BATTLE"
+hold down+l
+run 240
+release
+run 60
+poke DEBUG_MENU_CURSOR_POSITION 04 00
+run 5
+shot dbg_menu_cursor
+press a 6
+run 200
+shot battle_a
+peek BATTLE_MODE_FLAG 2
+run 300
+shot battle_b
+peek BATTLERS_TABLE 80
+press a 6
+run 120
+shot battle_c
+press a 6
+run 120
+shot battle_d
+run 300
+shot battle_e
+run 300
+shot battle_f

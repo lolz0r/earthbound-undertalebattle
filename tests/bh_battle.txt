@@ -1,0 +1,40 @@
+# Boot to the debug menu, start SHOW BATTLE, keep choosing the first command until the dodge phase starts
+hold down+l
+run 240
+release
+run 60
+poke DEBUG_MENU_CURSOR_POSITION 04 00
+run 5
+press a 6
+run 200
+spam a 40 4000 BH_DP 1
+peek BH_DP 96
+shot bh_start
+run 10
+shot bh_010
+hold right
+run 30
+peek BH_DP 96
+shot bh_040
+hold up
+run 30
+peek BH_DP 96
+shot bh_070
+hold left
+run 30
+shot bh_100
+release
+run 40
+peek BH_DP 96
+shot bh_140
+run 60
+peek BH_DP 96
+shot bh_200
+waitmem BH_DP 0 600
+peek BH_DP 96
+shot bh_end
+run 60
+shot bh_after
+run 120
+shot bh_after2
+peek BATTLERS_TABLE+17 4

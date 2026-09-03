@@ -1,0 +1,176 @@
+hold down+l
+run 240
+release
+run 60
+poke DEBUG_MENU_CURSOR_POSITION 04 00
+run 5
+press a 6
+run 200
+press a 6
+run 60
+echo -- sample 0
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_00
+press a 6
+run 60
+echo -- sample 1
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_01
+press a 6
+run 60
+echo -- sample 2
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_02
+press a 6
+run 60
+echo -- sample 3
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_03
+press a 6
+run 60
+echo -- sample 4
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_04
+press a 6
+run 60
+echo -- sample 5
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_05
+press a 6
+run 60
+echo -- sample 6
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_06
+press a 6
+run 60
+echo -- sample 7
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_07
+press a 6
+run 60
+echo -- sample 8
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_08
+press a 6
+run 60
+echo -- sample 9
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_09
+press a 6
+run 60
+echo -- sample 10
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_10
+press a 6
+run 60
+echo -- sample 11
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_11
+press a 6
+run 60
+echo -- sample 12
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_12
+press a 6
+run 60
+echo -- sample 13
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_13
+press a 6
+run 60
+echo -- sample 14
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_14
+press a 6
+run 60
+echo -- sample 15
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_15
+press a 6
+run 60
+echo -- sample 16
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_16
+press a 6
+run 60
+echo -- sample 17
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_17
+press a 6
+run 60
+echo -- sample 18
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_18
+press a 6
+run 60
+echo -- sample 19
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_19
+press a 6
+run 60
+echo -- sample 20
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_20
+press a 6
+run 60
+echo -- sample 21
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_21
+press a 6
+run 60
+echo -- sample 22
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_22
+press a 6
+run 60
+echo -- sample 23
+peek BH_DP 48
+peek BATTLE_MODE_FLAG 1
+peek CURRENT_ATTACKER 2
+shot diag_23

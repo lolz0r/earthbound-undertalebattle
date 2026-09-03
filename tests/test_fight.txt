@@ -1,0 +1,27 @@
+# Party-first battle: Ness bashes -> FIGHT gauge; the harness taps A every 40 frames
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 01 00
+poke ENEMIES_IN_BATTLE 01 00
+poke ENEMIES_IN_BATTLE_IDS 9F 00
+poke BATTLE_INITIATIVE 00 00
+poke BATTLE_MODE FF FF
+run 300
+spam a 40 2400 BH_DP+0x52 1
+peek BH_DP 96
+shot fight_start
+run 15
+shot fight_015
+run 15
+shot fight_030
+press a 4
+run 6
+shot fight_pressed
+peek BH_DP+0x3E 2
+peek BH_DP+0x54 2
+waitmem BH_DP 0 600
+run 60
+shot fight_after
+run 120
+shot fight_after2
+peek BATTLERS_TABLE+624+17 2

@@ -1,0 +1,18 @@
+# ROMs (copyrighted) and build outputs
+*.sfc
+*.smc
+*.srm
+*.st
+tests/out/
+# third-party toolchain clones / binaries (see README for how to rebuild)
+tools/cc65/
+tools/ebbinex/
+tools/spcasm/
+tools/ldc2/
+tools/snes9x/
+tools/bin/
+tools/harness/ebharness
+tools/harness/out/
+tools/harness/libretro.h
+# the disassembly is its own git repository (branch bullet-hell)
+ebsrc/
