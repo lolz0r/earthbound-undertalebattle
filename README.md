@@ -8,6 +8,38 @@ The hack is built from source: the [ebsrc](https://github.com/Herringway/ebsrc)
 disassembly (checked out in `ebsrc/`, branch `bullet-hell`) rebuilds the original ROM
 byte-for-byte, and the new engine is added on top as normal source files.
 
+## Playing it: applying the patch
+
+`EarthBound - Bullet Hell.ips` (about 290 KB) turns a clean EarthBound (USA) ROM into the
+hacked one. No ROM is distributed here; you need your own copy.
+
+| | size | SHA-1 |
+|---|---|---|
+| input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
+| output: patched ROM | 4,194,304 bytes | `68b267225a3d3c11f360665601bf880152f380a4` |
+
+Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
+or drag and drop), Lunar IPS on Windows, or a browser patcher such as
+[ROM Patcher JS](https://www.marcrobledo.com/RomPatcher.js/). Or use the small applier
+in this repository, which only needs Python 3 and also checks the hashes:
+
+```
+python3 tools/apply_ips.py "EarthBound (USA).sfc" "EarthBound - Bullet Hell.ips" "EarthBound - Bullet Hell.sfc"
+```
+
+Notes:
+
+* The patch is for the unheadered ROM. If your file is 3,146,240 bytes it has a
+  512-byte copier header; `apply_ips.py` strips it automatically, for other tools remove
+  it first (Flips does this too) or the patch lands 512 bytes off.
+* The result is 4 MB (the original 3 MB plus three new banks of per-enemy data) with a
+  corrected header checksum. It runs on the usual emulators (snes9x, bsnes/higan, Mesen 2,
+  RetroArch cores) and on flash carts that take 4 MB HiROM images. The game's
+  copy-protection checks are removed, so the expanded ROM does not trigger the
+  piracy warning screen or the "enemy swarm" penalties.
+* Saves and save states from the unmodified game are not expected to work; start a new
+  game.
+
 ## What changes in the game
 
 **Enemy turns.** After the usual "X attacks!" / "X used PSI Fire!" text, a white box
@@ -57,6 +89,7 @@ enemy sprites, experience) is untouched.
 
 ```
 EarthBound (USA).sfc      original ROM (No-Intro, SHA-1 d67a8ef3...) - you supply this
+EarthBound - Bullet Hell.ips  the hack as an IPS patch (see "Applying the patch")
 ebsrc/                    disassembly + the hack (git branch bullet-hell)
   src/battle/bullet_hell/ bh_engine.asm (engine, bank $EE), bh_data.asm (base graphics,
                           type table), bh_enemies.asm (generated: per-enemy records,
@@ -72,6 +105,9 @@ tools/                    toolchain, all built in user space
   gen_bh_gfx.py           base tiles (heart, box lines, gauge, bones) from ASCII art
   gen_bh_enemy_gfx.py     decodes every enemy's battle sprite and cuts its bullet sheet
   gen_bh_enemies.py       writes the per-enemy records and attack programs
+  make_ips.py             builds the IPS patch from the original and the built ROM
+  apply_ips.py            applies it (Python 3 only, verifies SHA-1s, strips copier headers)
+  fix_checksum.py         rewrites the header checksum (run by the Makefile after linking)
   env.sh                  puts the toolchain on PATH
 tests/                    harness scripts (*.txt), run.sh, captured screenshots in out/
 ```
@@ -92,6 +128,22 @@ If you add or remove `.INCLUDE` lines in `src/bankconfig/`, delete the affected
 After changing a generator, re-run it before `make` (`python3 tools/gen_bh_gfx.py`,
 `python3 tools/gen_bh_enemy_gfx.py`, `python3 tools/gen_bh_enemies.py`). The ROM is
 4 MB (the original 3 MB plus banks $F0-$F2); the header already declared 4 MB.
+
+Bank $C2 (the battle code) is full to within about 120 bytes. If `build/earthbound.map`
+shows `BANK02` larger than `$10000`, or `BANK03` starting at `$C40000` instead of
+`$C30000`, the bank overflowed and the linker silently shifted every later bank by one:
+the game still runs (all code is label-resolved) but the IPS patch balloons from ~290 KB
+to 3 MB. Three data tables that are only read with long addressing were already moved
+from `bank02.asm` to `bank2e.asm` for this reason; move more the same way if needed.
+
+To regenerate the patch after a build:
+
+```
+python3 tools/make_ips.py "EarthBound (USA).sfc" ebsrc/build/earthbound.sfc "EarthBound - Bullet Hell.ips"
+```
+
+It writes the patch only after applying it back to the original and checking that the
+result is byte-identical to the build, and prints the SHA-1 of both ROMs.
 
 To hand-tune one enemy, edit its record and its two programs in `bh_enemies.asm`
 (each program is a few macro lines: RAIN, SIDE, AIMED, RISE, WALL, RING, SPAWN, WAIT).
