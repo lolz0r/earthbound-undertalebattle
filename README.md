@@ -5,8 +5,10 @@ damage" turn with a real-time dodge phase, and the party's physical attacks with
 timing gauge, in the style of Undertale.
 
 The hack is built from source: the [ebsrc](https://github.com/Herringway/ebsrc)
-disassembly (checked out in `ebsrc/`, branch `bullet-hell`) rebuilds the original ROM
-byte-for-byte, and the new engine is added on top as normal source files.
+disassembly rebuilds the original ROM byte-for-byte, and the new engine is added on top
+as normal source files. This repository holds the patch for players, the tools and tests,
+and the engine source as a diff against ebsrc (`patches/ebsrc-bullet-hell.patch`); the
+disassembly itself is not included, see "Building from source".
 
 ## Playing it: applying the patch
 
@@ -90,7 +92,8 @@ enemy sprites, experience) is untouched.
 ```
 EarthBound (USA).sfc      original ROM (No-Intro, SHA-1 d67a8ef3...) - you supply this
 EarthBound - Bullet Hell.ips  the hack as an IPS patch (see "Applying the patch")
-ebsrc/                    disassembly + the hack (git branch bullet-hell)
+patches/ebsrc-bullet-hell.patch  the engine source as a git diff against upstream ebsrc
+ebsrc/                    local checkout of the disassembly with the patch applied (not in git)
   src/battle/bullet_hell/ bh_engine.asm (engine, bank $EE), bh_data.asm (base graphics,
                           type table), bh_enemies.asm (generated: per-enemy records,
                           462 attack programs, hit boxes; bank $F0)
@@ -112,15 +115,32 @@ tools/                    toolchain, all built in user space
 tests/                    harness scripts (*.txt), run.sh, captured screenshots in out/
 ```
 
-## Building
+## Building from source
+
+The engine lives in `patches/ebsrc-bullet-hell.patch`, a diff against ebsrc commit
+`0197d6c13ef11ad3280e9388e08a646ab1030d15` (32 source files: the engine, its include
+files, the bank configuration and the hooks in the game's battle code). Everything under
+ebsrc's `src/bin/` is generated, either extracted from your ROM by ebbinex or written by
+the generators in `tools/`, so none of it is in git.
 
 ```
-source tools/env.sh
+git clone https://github.com/Herringway/ebsrc.git
+git -C ebsrc checkout 0197d6c13ef11ad3280e9388e08a646ab1030d15
+git -C ebsrc apply ../patches/ebsrc-bullet-hell.patch
+source tools/env.sh                                # needs the toolchain under tools/ (cc65, ebbinex, spcasm)
 cd ebsrc
 ebbinex earthbound.yml "../EarthBound (USA).sfc"   # once: extract assets from the ROM
+python3 ../tools/gen_bh_gfx.py                     # base tiles and palette  -> src/bin/bh/
+python3 ../tools/gen_bh_enemy_gfx.py               # per-enemy bullet sheets and hit boxes
+python3 ../tools/gen_bh_enemies.py                 # per-enemy records and attack programs
 make -j16                                          # -> build/earthbound.sfc
 make -j16 EXTRA="-D BH_DEBUG" BUILDDIR=build-debug # optional: debug-menu build (hold Down+L at power-on)
 ```
+
+The toolchain directories under `tools/` (cc65, ebbinex, spcasm, ldc2, the snes9x
+libretro core) are built from their upstream sources and are not in git either; `env.sh`
+expects them there. The harness is a single C file, `tools/harness/ebharness.c`, built
+against the snes9x libretro core.
 
 If you add or remove `.INCLUDE` lines in `src/bankconfig/`, delete the affected
 `build/US/*.dep` files first; they are only regenerated when the bank's own file changes.
