@@ -17,19 +17,19 @@ press a 4
 waitmem BH_DP 1 600
 peek BH_DP+0x52 2
 run 10
-press b 2
+press x 2
 run 12
 shot cb_step0
-press a 2
+press y 2
 run 12
 shot cb_step1
 press x 2
 run 12
 shot cb_step2
-press b 2
+press a 2
 run 12
 shot cb_step3
-press y 2
+press x 2
 run 12
 shot cb_step4
 peek BH_BULLETS+64 10

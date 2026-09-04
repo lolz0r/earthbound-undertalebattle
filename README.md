@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `4ea1458e04aca0a5db0ae2aeae408a625bb055de` |
+| output: patched ROM | 4,194,304 bytes | `184e399bf9e450c66da09c53cb08ec56760082bf` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -91,11 +91,13 @@ enemy sprites, experience) is untouched.
 
 Each physical attack by a party member picks one of six minigames at random
 (one in six each); each enemy attack is a dodge box three times in four and a
-timed block otherwise. Auto Fight skips all of them. Each game first prints a
-one-line instruction in the battle text window ("Mash the A button!", "Press each
-button as its note reaches it!", "Dodge the bullets!" ...), every graded press
-floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade is
-never in doubt, and a game you never press a button in says MISS and whiffs.
+timed block otherwise. Auto Fight skips all of them. Each box carries a one-line
+instruction along its bottom edge, in the same sprite font as the grade labels
+("MASH THE A BUTTON", "TAP THE BUTTON A NOTE HITS", "DODGE THE BULLETS" ...); the
+lines are pre-rendered by `tools/gen_bh_gfx.py` (`bh_hints.bin`, bank $F0) and a
+game uploads its own line into three spare sprite slots when it starts. Every graded
+press floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade
+is never in doubt, and a game you never press a button in says MISS and whiffs.
 
 - **Timing gauge** (as before): press A while the bouncing reticle is in the green
   for a SMAAAASH; yellow always connects, red misses 70 % of the time.
@@ -158,7 +160,7 @@ then press the right buttons at the right frames (`waitle`/`waitmem`);
 - Five new minigames, picked at random: a rhythm game with the SNES buttons in the middle
   of the box, a focus/timed-block game for attacks and enemy attacks, a mash bar, a slot
   machine and a button combo (above), with PERFECT / GOOD / OK / MISS labels and sounds on
-  every press and a one-line instruction before each game.
+  every press and a one-line instruction drawn inside each box.
 - Fixed the corrupted dodge box in the Giygas prayer phase: the phase transitions
   reload the enemy sprite VRAM over the engine's tiles, which are now re-uploaded on
   every reload (`UNKNOWN_C2C21F`).
@@ -203,7 +205,7 @@ tests/                    harness scripts (*.txt), run.sh, captured screenshots 
 ## Building from source
 
 The engine lives in `patches/ebsrc-bullet-hell.patch`, a diff against ebsrc commit
-`0197d6c13ef11ad3280e9388e08a646ab1030d15` (34 source files: the engine, its include
+`0197d6c13ef11ad3280e9388e08a646ab1030d15` (35 source files: the engine, its include
 files, the bank configuration and the hooks in the game's battle code). Everything under
 ebsrc's `src/bin/` is generated, either extracted from your ROM by ebbinex or written by
 the generators in `tools/`, so none of it is in git.

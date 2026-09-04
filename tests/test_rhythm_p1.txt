@@ -20,12 +20,6 @@ peek BH_DP+0x32 2
 peek BH_BULLETS+16 10
 run 12
 shot rd_000
-run 30
-shot rd_030
-run 30
-shot rd_060
-run 30
-shot rd_090
 waitmem BH_DP 0 900
 peek BH_DP+0x3E 2
 peek BH_DP+0x92 2

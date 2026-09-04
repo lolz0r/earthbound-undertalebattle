@@ -19,8 +19,6 @@ peek BH_DP+0x52 2
 peek BH_BULLETS+48 10
 run 12
 shot cb_000
-run 60
-shot cb_060
 waitmem BH_DP 0 900
 peek BH_DP+0x3E 2
 peek BH_DP+0x92 2
