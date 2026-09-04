@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `b7be25555336720eed9f85ed477ca1bc8ffce757` |
+| output: patched ROM | 4,194,304 bytes | `afdf88fa5a720443ddc922d16547bde753cf9e1d` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -87,6 +87,34 @@ The box grows out of its centre when a phase starts and shrinks away afterwards.
 Everything else (menus, PSI, items, status effects, the rolling HP meter, backgrounds,
 enemy sprites, experience) is untouched.
 
+## Three attack minigames, two ways to take a hit
+
+Each physical attack by a party member picks one of three minigames at random
+(the gauge twice as often as the others); each enemy attack is a dodge box three
+times in four and a timed block otherwise. Auto Fight skips all of them.
+
+- **Timing gauge** (as before): press A while the bouncing reticle is in the green
+  for a SMAAAASH; yellow always connects, red misses 70 % of the time.
+- **Rhythm** (3-5 seconds): notes scroll from the right towards the hit line on the
+  left. Press A as each note crosses the line. Every press pops a green (perfect),
+  yellow (good/ok) or red (missed note) block off the line with its own sound, and
+  the strip along the bottom keeps the result of each note. Damage is 40-100 % by
+  accuracy (perfect 10, good 7, ok 4 points per note); 90 % or better is a SMAAAASH,
+  hitting nothing is a whiff.
+- **Focus**: four brackets close in on a crosshair; press A when they frame it.
+  Perfect (within 2 px) is a SMAAAASH at 100 %, good 85 %, ok 70 %, a miss 40 % and
+  the usual hit roll. The target turns into a spark on a perfect press, and the
+  pop and sound tell you the grade at once.
+- **Timed block** (enemy attacks): the same brackets close on your heart. A perfect
+  press dodges the attack outright ("dodged quickly"), good takes 50 %, ok 75 %, a
+  miss the full hit. The brackets pause for 12 frames before they start moving and
+  take 33-60 frames to reach the heart, so there is always time to read the speed.
+
+`poke BH_DP+0x9C n` in a harness script forces a kind (1 gauge, 2 rhythm, 3 focus
+for attacks; 4 block, 5 dodge box for enemy attacks); `tests/test_rhythm.txt`,
+`tests/test_focus_attack.txt` and `tests/test_focus_block*.txt` play each one with
+frame-exact presses (`waitle` waits until a note or the brackets reach the line).
+
 ## Classic mode, rolling HP and fairness
 
 - **Auto Fight turns the minigames off.** Pick Auto Fight in the command menu and the
@@ -106,6 +134,8 @@ enemy sprites, experience) is untouched.
 
 ### 2026-09-04
 
+- Two new minigames, picked at random: a rhythm game for attacks and a focus/timed-block
+  game for attacks and enemy attacks (above), each with instant colour and sound feedback.
 - Fixed the corrupted dodge box in the Giygas prayer phase: the phase transitions
   reload the enemy sprite VRAM over the engine's tiles, which are now re-uploaded on
   every reload (`UNKNOWN_C2C21F`).
@@ -150,7 +180,7 @@ tests/                    harness scripts (*.txt), run.sh, captured screenshots 
 ## Building from source
 
 The engine lives in `patches/ebsrc-bullet-hell.patch`, a diff against ebsrc commit
-`0197d6c13ef11ad3280e9388e08a646ab1030d15` (33 source files: the engine, its include
+`0197d6c13ef11ad3280e9388e08a646ab1030d15` (34 source files: the engine, its include
 files, the bank configuration and the hooks in the game's battle code). Everything under
 ebsrc's `src/bin/` is generated, either extracted from your ROM by ebbinex or written by
 the generators in `tools/`, so none of it is in git.

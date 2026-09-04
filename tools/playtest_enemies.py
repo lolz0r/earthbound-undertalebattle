@@ -43,7 +43,7 @@ def script(eid, pat):
         f'poke CURRENT_BATTLE_GROUP {g & 255:02X} {g >> 8:02X}', 'poke ENEMIES_IN_BATTLE 01 00',
         f'poke ENEMIES_IN_BATTLE_IDS {eid & 255:02X} {eid >> 8:02X}', 'poke BATTLE_INITIATIVE 02 00', 'poke BATTLE_MODE FF FF',
         'poke PARTY_CHARACTERS+10 E7 03', 'poke PARTY_CHARACTERS+69 E7 03 E7 03',
-        'waitmem BATTLE_MODE_FLAG 1 900', f'poke BH_DP+0x9A {pat:02X}',
+        'waitmem BATTLE_MODE_FLAG 1 900', f'poke BH_DP+0x9A {pat:02X}', 'poke BH_DP+0x9C 05',
         'spam a 40 3000 BH_DP 1', f'peek BH_DP+{TIMER} 2', f'peek BH_DP+{SPEED} 2', f'peek BH_DP+{TEMPO} 2',
         ('dodge 1200' if MODE == 'ai' else 'waitmem BH_DP 0 1300\npeek BH_DP+0x0A 2\npeek BH_DP+0x2A 2'), '']) 
 def run(job):

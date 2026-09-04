@@ -67,10 +67,10 @@ index 37cd3d5e..1b61524f 100644
  # ca65 requires all bin files to be present for generating .dep files, so make sure they're present first
 diff --git a/include/bullet_hell.asm b/include/bullet_hell.asm
 new file mode 100644
-index 00000000..242464a4
+index 00000000..b6b11dee
 --- /dev/null
 +++ b/include/bullet_hell.asm
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,269 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase - shared constants.
 +;
@@ -89,7 +89,7 @@ index 00000000..242464a4
 +BH_HEART_HALF    = 3           ; half size of the heart's hit box
 +BH_ATTR_BASE     = $3E         ; OAM attribute: priority 3, palette 7
 +BH_OBJ_PALETTE   = $1E0        ; byte offset of OBJ palette 7 inside PALETTES
-+BH_NUM_PIECES    = 5           ; 32x32 tile pieces uploaded to sprite VRAM
++BH_NUM_PIECES    = 6           ; 32x32 tile pieces uploaded to sprite VRAM
 +BH_PIECE_BYTES   = 512
 +
 +; ---- direct page layout (offsets from BH_DP; all fields are 16-bit) ----
@@ -116,11 +116,10 @@ index 00000000..242464a4
 +BH_SPEED         = $2C   ; bullet speed scale, 16 = 1.0
 +BH_RESULT        = $2E
 +BH_HEART_SPD     = $30
-+BH_PIECE_TILE    = $32   ; 5 words: VRAM tile number of each uploaded piece ($32-$3B)
-+BH_ENEMY_LEVEL   = $3C
++BH_PIECE_TILE    = $32   ; 6 words: VRAM tile number of each uploaded piece ($32-$3D)
 +BH_DMG_PCT       = $3E   ; damage percent for the action being resolved (0 = unscaled)
 +BH_MOVED         = $50   ; heart moved this frame (blue/orange bullets)
-+BH_MODE          = $52   ; 0 = dodge phase, 1 = FIGHT timing gauge
++BH_MODE          = $52   ; 0 = dodge phase, 1 = FIGHT timing gauge, 2 = rhythm, 3 = focus
 +BH_CURSOR_X      = $54   ; gauge cursor x (screen px of the 2px line)
 +BH_FIGHT_STATE   = $56   ; 0 sweeping, 1 pressed (blinking)
 +BH_FIGHT_TIMER   = $58
@@ -148,6 +147,29 @@ index 00000000..242464a4
 +BH_FORCE         = $96   ; hit/miss override for the action being resolved: 0 normal, 1 always hits, 2 always misses
 +BH_SAVED_ROLL    = $98   ; DISABLE_HPPP_ROLLING value to restore after a minigame
 +BH_FORCE_PAT     = $9A   ; test hook: 0 = pattern by action type, 1 = force the physical program, 2 = force the PSI one
++BH_FORCE_MG      = $9C   ; test hook: 0 = random, 1 gauge, 2 rhythm, 3 focus (attacks); 4 focus block, 5 dodge (enemy attacks)
++; ---- minigame state ($A0-$BF; initialised by the minigame that uses it) ----
++; the rhythm game also uses BH_CURSOR_X (hit line x) and BH_FIGHT_DIR (note speed, 12.4);
++; the focus game uses BH_FIGHT_DIR (closing speed, 12.4)
++BH_MG_NOTE_X     = $A0   ; 5 words: rhythm note x, 12.4 fixed ($A0-$A9)
++BH_MG_NOTE_ST    = $AA   ; 5 words: note state 0 pending, 1 perfect, 2 good, 3 ok, 4 missed/unused ($AA-$B3)
++BH_MG_COUNT      = $B4   ; word: number of notes / focus: 1 = blocking an enemy attack
++BH_MG_SCORE      = $B6   ; word: rhythm points / focus: result 0 perfect, 1 good, 2 ok, 3 miss
++BH_MG_FB_TIMER   = $B8   ; word: frames the feedback pop stays
++BH_MG_FB_KIND    = $BA   ; word: sprite type of the pop (gauge green/yellow/red block)
++BH_MG_FB_X       = $BC   ; word: pop x
++BH_MG_DIST       = $BE   ; word: focus bracket distance from the centre, 12.4 fixed
++BH_RHYTHM_BOX_W  = 176
++BH_RHYTHM_BOX_H  = 48
++BH_FOCUS_BOX_W   = 112
++BH_FOCUS_BOX_H   = 80
++BH_FOCUS_TARGET  = 8     ; bracket distance (px) that means "in focus"
++BH_NOTE_PERFECT  = 4     ; px from the hit line
++BH_NOTE_GOOD     = 10
++BH_NOTE_OK       = 18
++BH_FOCUS_PERFECT = 2
++BH_FOCUS_GOOD    = 6
++BH_FOCUS_OK      = 12
 +BH_FIGHT_YELLOW  = 40    ; half width of the zone (green + yellow) that always connects
 +BH_RED_MISS_CHANCE = 179 ; out of 256: a press in the red misses 70% of the time
 +BH_BOX_ANIM_FRAMES = 8
@@ -216,6 +238,11 @@ index 00000000..242464a4
 +BH_TYPE_GAUGE_GRN = 11
 +BH_TYPE_CURSOR   = 12
 +BH_TYPE_THEME0   = 13   ; the four sprites of the attacking enemy's theme sheet
++BH_TYPE_BRACKET  = 17
++BH_TYPE_CROSSHAIR= 18
++BH_TYPE_NOTE     = 19
++BH_TYPE_SPARK    = 20
++BH_TYPE_VLINE    = 21
 +BH_TYPE_THEME1   = 14
 +BH_TYPE_THEME2   = 15
 +BH_TYPE_THEME3   = 16
@@ -483,10 +510,10 @@ index 00000000..3cfc37d5
 +BH_ENEMY_SHEETS_B:
 +	.INCBIN "bin/bh/enemy_sheets_b.bin"
 diff --git a/src/bankconfig/common/bank2e.asm b/src/bankconfig/common/bank2e.asm
-index 34a8180c..d33dce97 100644
+index 34a8180c..3b1495b6 100644
 --- a/src/bankconfig/common/bank2e.asm
 +++ b/src/bankconfig/common/bank2e.asm
-@@ -115,3 +115,24 @@
+@@ -115,3 +115,25 @@
  	INSERT_AUDIO_PACK 148
  	INSERT_AUDIO_PACK 45
  .ENDIF
@@ -505,6 +532,7 @@ index 34a8180c..d33dce97 100644
 +.INCLUDE "symbols/misc.inc.asm"
 +.INCLUDE "symbols/text.inc.asm"
 +.INCLUDE "battle/bullet_hell/bh_engine.asm"
++.INCLUDE "battle/bullet_hell/bh_minigames.asm"
 +.INCLUDE "battle/bullet_hell/bh_data.asm"
 +; data tables moved out of bank $C2 to make room for the bullet-hell hooks (see bank02.asm);
 +; every reference to them uses long addressing, so any bank works
@@ -537,10 +565,10 @@ index 6375a6d9..905ff417 100644
  INTRO_BG2_BUFFER:
 diff --git a/src/battle/bullet_hell/bh_data.asm b/src/battle/bullet_hell/bh_data.asm
 new file mode 100644
-index 00000000..fa0d38ba
+index 00000000..3ca0687b
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_data.asm
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,36 @@
 +; Sprite graphics for the bullet-hell dodge phase (generated by tools/gen_bh_gfx.py)
 +BH_TILES:
 +	.INCBIN "bin/bh/bh_tiles.bin"
@@ -566,6 +594,11 @@ index 00000000..fa0d38ba
 +	.BYTE $80,  2, 0, 3, 3, 0  ; 14 theme sprite 1
 +	.BYTE $80, 32, 0, 3, 3, 0  ; 15 theme sprite 2
 +	.BYTE $80, 34, 0, 3, 3, 0  ; 16 theme sprite 3
++	.BYTE 5,  0, 0, 0, 0, 0    ; 17 focus bracket (top-left corner; flips give the others)
++	.BYTE 5,  2, 0, 0, 0, 0    ; 18 crosshair
++	.BYTE 5, 32, 0, 0, 0, 0    ; 19 rhythm note
++	.BYTE 5, 34, 0, 0, 0, 0    ; 20 spark
++	.BYTE 2,  0, 0, 0, 0, 0    ; 21 vertical 2 px line (rhythm hit line)
 +
 +
 +; colours of the nine FIGHT gauge blocks, left to right
@@ -8147,10 +8180,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..d9c8abc0
+index 00000000..14c282e2
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,2856 @@
+@@ -0,0 +1,2870 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -8281,7 +8314,7 @@ index 00000000..d9c8abc0
 +	JSR BH_ACTION_TYPE
 +	CMP #ACTION_TYPE::PHYSICAL
 +	BNEL @normal
-+	JSR BH_FIGHT_PHASE      ; sets BH_DMG_PCT from the timing
++	JSR BH_PICK_ATTACK_GAME ; gauge, rhythm or focus: sets BH_DMG_PCT from the timing
 +	JMP @normal
 +@enemy:
 +	JSR BH_ACTION_TYPE
@@ -8438,12 +8471,14 @@ index 00000000..d9c8abc0
 +	LDA a:battler::vram_sprite_index,X
 +	AND #$0003
 +	STA z:BH_THEME_PAL
-+	JSR BH_RUN_PHASE
++	JSR BH_PICK_DEFENSE_GAME ; the dodge box or a timed block
 +	LDA z:BH_HITS
 +	BEQ @dodged
++	LDA z:BH_DMG_PCT
++	BNE :+
 +	LDA #100
 +	STA z:BH_DMG_PCT
-+	LDA #1
++:	LDA #1
 +	STA z:BH_FORCE          ; a hit in the box is a hit: no miss or dodge roll afterwards
 +	BRA @normal
 +@dodged:
@@ -10644,7 +10679,19 @@ index 00000000..d9c8abc0
 +@content:
 +	LDA z:BH_MODE
 +	BEQ @dodge
++	CMP #2
++	BEQ @rhythm
++	CMP #3
++	BEQ @focus
 +	JSR BH_RENDER_GAUGE
++	JSR BH_DRAW_BORDER
++	JMP @done
++@rhythm:
++	JSR BH_RENDER_RHYTHM
++	JSR BH_DRAW_BORDER
++	JMP @done
++@focus:
++	JSR BH_RENDER_FOCUS
 +	JSR BH_DRAW_BORDER
 +	JMP @done
 +@dodge:
@@ -11006,6 +11053,715 @@ index 00000000..d9c8abc0
 +@skip8:
 +	REP #PROC_FLAGS::ACCUM8
 +@full:
++	RTS
+diff --git a/src/battle/bullet_hell/bh_minigames.asm b/src/battle/bullet_hell/bh_minigames.asm
+new file mode 100644
+index 00000000..71369ca4
+--- /dev/null
++++ b/src/battle/bullet_hell/bh_minigames.asm
+@@ -0,0 +1,703 @@
++; ---------------------------------------------------------------------------
++; Extra minigames, picked at random per action:
++;   BH_RHYTHM_PHASE - a short rhythm game: notes scroll towards a hit line,
++;                     press A on the beat; accuracy sets the damage (40-100 %),
++;                     90 %+ is a SMAAAASH. Every press gets an instant pop
++;                     (green/yellow/red) and a sound, and the strip along the
++;                     bottom keeps the result of each note.
++;   BH_FOCUS_PHASE  - four brackets close in on a target; press A when they
++;                     frame it. Attacks: 100/85/70/40 % damage, SMAAAASH when
++;                     perfect. Enemy attacks: a perfect block dodges the blow,
++;                     good/ok take 50/75 %.
++; All run inside the engine's direct page, like BH_FIGHT_PHASE.
++; ---------------------------------------------------------------------------
++
++; party physical attack: gauge (2 in 4), rhythm (1 in 4) or focus (1 in 4)
++BH_PICK_ATTACK_GAME:
++	LDA z:BH_FORCE_MG
++	BNE @forced
++	JSL RAND
++	AND #$0003
++	INC                     ; 1 or 4: gauge, 2: rhythm, 3: focus
++@forced:
++	CMP #2
++	BEQ @rhythm
++	CMP #3
++	BEQ @focus
++	JMP BH_FIGHT_PHASE
++@rhythm:
++	JMP BH_RHYTHM_PHASE
++@focus:
++	LDA #0
++	JMP BH_FOCUS_PHASE
++
++; enemy attack: the dodge box (3 in 4) or a timed block (1 in 4)
++BH_PICK_DEFENSE_GAME:
++	LDA z:BH_FORCE_MG
++	CMP #4
++	BEQ @focus
++	CMP #5
++	BEQ @dodge
++	JSL RAND
++	AND #$0003
++	BEQ @focus
++@dodge:
++	JMP BH_RUN_PHASE
++@focus:
++	LDA #1
++	JMP BH_FOCUS_PHASE
++
++; A = sound effect (X and the index width preserved)
++BH_MG_SOUND:
++	PHX
++	JSL PLAY_SOUND
++	REP #PROC_FLAGS::ACCUM8 | PROC_FLAGS::INDEX8
++	PLX
++	RTS
++
++; ===========================================================================
++; BH_RHYTHM_PHASE
++; ===========================================================================
++BH_RHYTHM_PHASE:
++	JSR BH_ROLL_FREEZE
++	LDA #BH_RHYTHM_BOX_W
++	STA z:BH_T0
++	LDA #BH_RHYTHM_BOX_H
++	STA z:BH_T1
++	JSR BH_SET_BOX
++	LDA #2
++	STA z:BH_MODE
++	STZ z:BH_FIGHT_STATE
++	STZ z:BH_FIGHT_TIMER
++	STZ z:BH_FRAME
++	STZ z:BH_MG_SCORE
++	STZ z:BH_MG_FB_TIMER
++	LDA #20
++	STA z:BH_DMG_PCT        ; whiffed unless a note is hit
++	LDA #2
++	STA z:BH_FIGHT_RESULT
++	STA z:BH_FORCE
++	LDA z:BH_BOX_X0
++	CLC
++	ADC #24
++	STA z:BH_CURSOR_X       ; hit line
++	JSL RAND
++	AND #$0001
++	CLC
++	ADC #4
++	STA z:BH_MG_COUNT       ; 4 or 5 notes
++	JSL RAND
++	AND #$000F
++	CLC
++	ADC #32
++	STA z:BH_FIGHT_DIR      ; 2.0-2.9 px per frame
++	; notes start beyond the right edge, 40-71 px apart
++	LDA z:BH_BOX_X1
++	CLC
++	ADC #8
++	STA z:BH_T2
++	LDX #0
++@note:
++	LDA z:BH_T2
++	ASL
++	ASL
++	ASL
++	ASL
++	STA z:BH_MG_NOTE_X,X
++	JSL RAND
++	AND #$001F
++	CLC
++	ADC #40
++	CLC
++	ADC z:BH_T2
++	STA z:BH_T2
++	INX
++	INX
++	CPX #10
++	BCC @note
++	LDX #0
++	STZ z:BH_T3
++@state:
++	LDA z:BH_T3
++	CMP z:BH_MG_COUNT
++	BCC @pending
++	LDA #4                  ; unused slot
++	BRA @store
++@pending:
++	LDA #0
++@store:
++	STA z:BH_MG_NOTE_ST,X
++	INC z:BH_T3
++	INX
++	INX
++	CPX #10
++	BCC @state
++	LDA #0
++	JSR BH_CALC_YSHIFT
++	JSR BH_UPLOAD_GFX
++	JSR BH_BOX_OPEN
++@loop:
++	JSR BH_TICK
++	JSR BH_RAMP_SHIFT
++	INC z:BH_FRAME
++	LDA z:BH_MG_FB_TIMER
++	BEQ :+
++	DEC z:BH_MG_FB_TIMER
++:	LDA z:BH_FIGHT_STATE
++	BEQ @running
++	JMP @winddown
++@running:
++	; ---- move the pending notes; 18 px past the line a note is missed ----
++	LDX #0
++@move:
++	LDA z:BH_MG_NOTE_ST,X
++	BNE @move_next
++	LDA z:BH_MG_NOTE_X,X
++	SEC
++	SBC z:BH_FIGHT_DIR
++	STA z:BH_MG_NOTE_X,X
++	JSR BH_ASR4
++	CLC
++	ADC #BH_NOTE_OK
++	CMP z:BH_CURSOR_X
++	BCS @move_next
++	LDA #4
++	STA z:BH_MG_NOTE_ST,X
++	LDA #BH_TYPE_GAUGE_RED
++	JSR BH_RHYTHM_POP
++	LDA #SFX::CURSOR_INVALID
++	JSR BH_MG_SOUND
++@move_next:
++	INX
++	INX
++	CPX #10
++	BCC @move
++	; ---- A hits the pending note nearest the hit line ----
++	LDA PAD_PRESS
++	AND #PAD::A_BUTTON
++	BNE @press
++	JMP @check
++@press:
++	LDA #$7FFF
++	STA z:BH_T5             ; best distance
++	LDA #$FFFF
++	STA z:BH_T6             ; best slot
++	LDX #0
++@find:
++	LDA z:BH_MG_NOTE_ST,X
++	BNE @find_next
++	LDA z:BH_MG_NOTE_X,X
++	JSR BH_ASR4
++	SEC
++	SBC z:BH_CURSOR_X
++	JSR BH_ABS
++	CMP z:BH_T5
++	BCS @find_next
++	STA z:BH_T5
++	STX z:BH_T6
++@find_next:
++	INX
++	INX
++	CPX #10
++	BCC @find
++	LDX z:BH_T6
++	BMI @check              ; no pending note
++	LDA z:BH_T5
++	CMP #BH_NOTE_OK + 1
++	BCS @check              ; nothing near the line: the press is ignored
++	CMP #BH_NOTE_PERFECT + 1
++	BCC @perfect
++	CMP #BH_NOTE_GOOD + 1
++	BCC @good
++	LDA #3
++	STA z:BH_MG_NOTE_ST,X
++	LDA #4
++	LDX #BH_TYPE_GAUGE_YEL
++	LDY #SFX::CURSOR3
++	BRA @scored
++@good:
++	LDA #2
++	STA z:BH_MG_NOTE_ST,X
++	LDA #7
++	LDX #BH_TYPE_GAUGE_YEL
++	LDY #SFX::CURSOR1
++	BRA @scored
++@perfect:
++	LDA #1
++	STA z:BH_MG_NOTE_ST,X
++	LDA #10
++	LDX #BH_TYPE_GAUGE_GRN
++	LDY #SFX::CURSOR2
++@scored:
++	CLC
++	ADC z:BH_MG_SCORE
++	STA z:BH_MG_SCORE
++	TXA
++	JSR BH_RHYTHM_POP
++	TYA
++	JSR BH_MG_SOUND
++@check:
++	; ---- every note resolved (or 6 seconds): wind down ----
++	LDX #0
++@chk:
++	LDA z:BH_MG_NOTE_ST,X
++	BEQ @still_pending
++	INX
++	INX
++	CPX #10
++	BCC @chk
++	BRA @finish
++@still_pending:
++	LDA z:BH_FRAME
++	CMP #360
++	BCC @loop_j
++@finish:
++	LDA #1
++	STA z:BH_FIGHT_STATE
++	LDA #24
++	STA z:BH_FIGHT_TIMER
++@loop_j:
++	JMP @loop
++@winddown:
++	DEC z:BH_FIGHT_TIMER
++	BNE @loop_j
++	; ---- result: 40..100 % of the damage by score, SMAAAASH from 90 % ----
++	LDA z:BH_MG_SCORE
++	BEQ @end                ; nothing hit: the 20 % whiff and the forced miss stand
++	LDA #1
++	STA z:BH_FORCE
++	LDA z:BH_MG_SCORE
++	LDY #60
++	JSL MULT168
++	STA z:BH_T0
++	LDA z:BH_MG_COUNT
++	LDY #10
++	JSL MULT168
++	TAY
++	LDA z:BH_T0
++	JSL DIVISION16S_DIVISOR_POSITIVE
++	CLC
++	ADC #40
++	STA z:BH_DMG_PCT
++	CMP #94
++	BCC @end
++	LDA #1
++	STA z:BH_FIGHT_RESULT
++@end:
++	STZ z:BH_YSHIFT_TGT
++	JSR BH_BOX_CLOSE
++	STZ z:BH_MODE
++@ramp:
++	JSR BH_TICK
++	JSR BH_RAMP_SHIFT
++	LDA z:BH_YSHIFT
++	BNE @ramp
++	JMP BH_ROLL_RESTORE
++
++; A = gauge block type -> a pop of that colour rises from the hit line
++BH_RHYTHM_POP:
++	STA z:BH_MG_FB_KIND
++	LDA #14
++	STA z:BH_MG_FB_TIMER
++	LDA z:BH_CURSOR_X
++	SEC
++	SBC #8
++	STA z:BH_MG_FB_X
++	RTS
++
++; ---------------------------------------------------------------------------
++BH_RENDER_RHYTHM:
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #8
++	STA z:BH_T7             ; note row
++	; the hit line: two 16 px line sprites
++	LDA #BH_TYPE_VLINE
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_CURSOR_X
++	DEC
++	STA z:BH_T0
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #4
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	LDA z:BH_CURSOR_X
++	DEC
++	STA z:BH_T0
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #20
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	; pending notes inside the box
++	LDX #0
++@note:
++	LDA z:BH_MG_NOTE_ST,X
++	BNE @note_next
++	STX z:BH_T6
++	LDA z:BH_MG_NOTE_X,X
++	JSR BH_ASR4
++	STA z:BH_T0
++	CLC
++	ADC #16
++	CMP z:BH_BOX_X1
++	BCS @note_restore
++	LDA z:BH_T0
++	CMP z:BH_BOX_X0
++	BCC @note_restore
++	LDA #BH_TYPE_NOTE
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T7
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@note_restore:
++	LDX z:BH_T6
++@note_next:
++	INX
++	INX
++	CPX #10
++	BCC @note
++	; the pop rising above the line
++	LDA z:BH_MG_FB_TIMER
++	BEQ @strip
++	LDA z:BH_MG_FB_KIND
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_MG_FB_X
++	STA z:BH_T0
++	LDA z:BH_T7
++	SEC
++	SBC #14
++	CLC
++	ADC z:BH_MG_FB_TIMER
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@strip:
++	; results along the bottom: green / yellow / red block per resolved note
++	LDX #0
++@res:
++	TXA
++	LSR
++	CMP z:BH_MG_COUNT
++	BCS @res_done
++	LDA z:BH_MG_NOTE_ST,X
++	BEQ @res_next
++	STX z:BH_T6
++	CMP #1
++	BEQ @res_grn
++	CMP #4
++	BEQ @res_red
++	LDA #BH_TYPE_GAUGE_YEL
++	BRA @res_draw
++@res_grn:
++	LDA #BH_TYPE_GAUGE_GRN
++	BRA @res_draw
++@res_red:
++	LDA #BH_TYPE_GAUGE_RED
++@res_draw:
++	JSR BH_TILE_FOR_TYPE
++	TXA                     ; 2i
++	ASL                     ; 4i
++	STA z:BH_T0
++	ASL
++	ASL                     ; 16i
++	CLC
++	ADC z:BH_T0             ; 20i
++	CLC
++	ADC z:BH_BOX_X0
++	CLC
++	ADC #12
++	STA z:BH_T0
++	LDA z:BH_BOX_Y1
++	SEC
++	SBC #18
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	LDX z:BH_T6
++@res_next:
++	INX
++	INX
++	CPX #10
++	BCC @res
++@res_done:
++	RTS
++
++; ===========================================================================
++; BH_FOCUS_PHASE - A = 0: attack (crosshair, damage bonus)  1: block an enemy
++; ===========================================================================
++BH_FOCUS_PHASE:
++	STA z:BH_MG_COUNT
++	JSR BH_ROLL_FREEZE
++	LDA #BH_FOCUS_BOX_W
++	STA z:BH_T0
++	LDA #BH_FOCUS_BOX_H
++	STA z:BH_T1
++	JSR BH_SET_BOX
++	LDA #3
++	STA z:BH_MODE
++	STZ z:BH_FIGHT_STATE
++	STZ z:BH_FIGHT_TIMER
++	STZ z:BH_FRAME
++	STZ z:BH_MG_FB_TIMER
++	LDA #3
++	STA z:BH_MG_SCORE       ; a miss until proven otherwise
++	LDA #44 * 16
++	STA z:BH_MG_DIST
++	JSL RAND
++	AND #$0007
++	CLC
++	ADC #10
++	STA z:BH_FIGHT_DIR      ; 0.6-1.1 px per frame: 33-60 frames to focus
++	LDA z:BH_MG_COUNT
++	BNE @block_init
++	LDA #40
++	STA z:BH_DMG_PCT        ; attack: 40 % unless timed
++	LDA #2
++	STA z:BH_FIGHT_RESULT
++	STZ z:BH_FORCE          ; and the usual hit roll
++	BRA @init_done
++@block_init:
++	LDA #1
++	STA z:BH_HITS           ; the blow lands unless the block is perfect
++	LDA #100
++	STA z:BH_DMG_PCT
++@init_done:
++	LDA #0
++	JSR BH_CALC_YSHIFT
++	JSR BH_UPLOAD_GFX
++	JSR BH_BOX_OPEN
++@loop:
++	JSR BH_TICK
++	JSR BH_RAMP_SHIFT
++	INC z:BH_FRAME
++	LDA z:BH_MG_FB_TIMER
++	BEQ :+
++	DEC z:BH_MG_FB_TIMER
++:	LDA z:BH_FIGHT_STATE
++	BNE @winddown
++	LDA z:BH_FRAME
++	CMP #12
++	BCC @loop               ; the brackets hold still for a moment first
++	LDA z:BH_MG_DIST
++	SEC
++	SBC z:BH_FIGHT_DIR
++	STA z:BH_MG_DIST
++	CLC
++	ADC #4 * 16
++	BPL @not_passed
++	LDA #3                  ; the brackets went through the target: a miss
++	JSR BH_FOCUS_RESOLVE
++	BRA @loop
++@not_passed:
++	LDA PAD_PRESS
++	AND #PAD::A_BUTTON
++	BEQ @loop
++	LDA z:BH_MG_DIST
++	JSR BH_ASR4
++	SEC
++	SBC #BH_FOCUS_TARGET
++	JSR BH_ABS
++	CMP #BH_FOCUS_PERFECT + 1
++	BCC @perfect
++	CMP #BH_FOCUS_GOOD + 1
++	BCC @good
++	CMP #BH_FOCUS_OK + 1
++	BCC @ok
++	LDA #3
++	BRA @resolve
++@perfect:
++	LDA #0
++	BRA @resolve
++@good:
++	LDA #1
++	BRA @resolve
++@ok:
++	LDA #2
++@resolve:
++	JSR BH_FOCUS_RESOLVE
++	BRA @loop
++@winddown:
++	DEC z:BH_FIGHT_TIMER
++	BNE @loop
++	STZ z:BH_YSHIFT_TGT
++	JSR BH_BOX_CLOSE
++	STZ z:BH_MODE
++@ramp:
++	JSR BH_TICK
++	JSR BH_RAMP_SHIFT
++	LDA z:BH_YSHIFT
++	BNE @ramp
++	JMP BH_ROLL_RESTORE
++
++; A = result (0 perfect, 1 good, 2 ok, 3 miss): feedback, sound and the outcome
++BH_FOCUS_RESOLVE:
++	STA z:BH_MG_SCORE
++	ASL
++	TAX
++	LDA #1
++	STA z:BH_FIGHT_STATE
++	LDA #30
++	STA z:BH_FIGHT_TIMER
++	STA z:BH_MG_FB_TIMER
++	LDA f:BH_FOCUS_FB_TYPE,X
++	STA z:BH_MG_FB_KIND
++	LDA f:BH_FOCUS_SFX,X
++	JSR BH_MG_SOUND
++	LDA z:BH_MG_COUNT
++	BNE @block
++	; attack: 100 / 85 / 70 / 40 %, a SMAAAASH when perfect; only a miss keeps the usual hit roll
++	LDA f:BH_FOCUS_ATK_PCT,X
++	STA z:BH_DMG_PCT
++	CPX #6
++	BEQ @done
++	LDA #1
++	STA z:BH_FORCE
++	CPX #0
++	BNE @done
++	STA z:BH_FIGHT_RESULT   ; 1 = SMAAAASH
++	RTS
++@block:
++	; enemy attack: dodged / 50 % / 75 % / 100 %
++	LDA f:BH_FOCUS_DEF_PCT,X
++	STA z:BH_DMG_PCT
++	BNE @done
++	STZ z:BH_HITS           ; a perfect block: the attack is dodged
++@done:
++	RTS
++
++BH_FOCUS_FB_TYPE:
++	.WORD BH_TYPE_GAUGE_GRN, BH_TYPE_GAUGE_YEL, BH_TYPE_GAUGE_YEL, BH_TYPE_GAUGE_RED
++BH_FOCUS_SFX:
++	.WORD SFX::CURSOR2, SFX::CURSOR1, SFX::CURSOR3, SFX::CURSOR_INVALID
++BH_FOCUS_ATK_PCT:
++	.WORD 100, 85, 70, 40
++BH_FOCUS_DEF_PCT:
++	.WORD 0, 50, 75, 100
++
++; ---------------------------------------------------------------------------
++BH_RENDER_FOCUS:
++	LDA z:BH_BOX_X0
++	CLC
++	ADC z:BH_BOX_X1
++	LSR
++	STA z:BH_PAT_WAIT       ; centre x (pattern fields are idle during a minigame; BH_T5 is not safe across BH_TILE_FOR_TYPE)
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC z:BH_BOX_Y1
++	LSR
++	STA z:BH_LOOP_CNT       ; centre y
++	; the target: heart (block) or crosshair (attack); a spark once a perfect press landed
++	LDA z:BH_FIGHT_STATE
++	BEQ @target
++	LDA z:BH_MG_SCORE
++	BEQ @spark
++	LDA z:BH_FIGHT_TIMER
++	AND #4
++	BNE @brackets
++@target:
++	LDA #BH_TYPE_CROSSHAIR
++	LDX z:BH_MG_COUNT
++	BEQ @put_target
++	LDA #BH_TYPE_HEART
++	BRA @put_target
++@spark:
++	LDA #BH_TYPE_SPARK
++@put_target:
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #8
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC #8
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@brackets:
++	LDA z:BH_MG_DIST
++	JSR BH_ASR4
++	STA z:BH_T7             ; distance in px
++	LDA #BH_TYPE_BRACKET
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T4
++	STA z:BH_LOOP_PC        ; base attribute (scratch while a minigame runs)
++	; top left
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC z:BH_T7
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC z:BH_T7
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	; top right (h-flip)
++	LDA z:BH_PAT_WAIT
++	CLC
++	ADC z:BH_T7
++	SEC
++	SBC #16
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC z:BH_T7
++	STA z:BH_T1
++	LDA z:BH_LOOP_PC
++	ORA #$40
++	STA z:BH_T4
++	JSR BH_OAM_PUT
++	; bottom left (v-flip)
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC z:BH_T7
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	CLC
++	ADC z:BH_T7
++	SEC
++	SBC #16
++	STA z:BH_T1
++	LDA z:BH_LOOP_PC
++	ORA #$80
++	STA z:BH_T4
++	JSR BH_OAM_PUT
++	; bottom right (both)
++	LDA z:BH_PAT_WAIT
++	CLC
++	ADC z:BH_T7
++	SEC
++	SBC #16
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	CLC
++	ADC z:BH_T7
++	SEC
++	SBC #16
++	STA z:BH_T1
++	LDA z:BH_LOOP_PC
++	ORA #$C0
++	STA z:BH_T4
++	JSR BH_OAM_PUT
++	; the pop rising above the target
++	LDA z:BH_MG_FB_TIMER
++	BEQ @done
++	LDA z:BH_MG_FB_KIND
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #8
++	STA z:BH_T0
++	LDA #30
++	SEC
++	SBC z:BH_MG_FB_TIMER
++	LSR
++	STA z:BH_T1
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC #26
++	SEC
++	SBC z:BH_T1
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@done:
 +	RTS
 diff --git a/src/battle/calc_damage.asm b/src/battle/calc_damage.asm
 index ef0b95da..98172ec4 100644

@@ -416,6 +416,13 @@ int main(int argc, char **argv) {
             held = save;
             printf("dodge: %lu frames, hits=%u frame=%u active=%u\n", i, wram[dp + 0x0A], (unsigned)rd16(dp + 0x2A), wram[dp]);
         }
+        else if (!strcmp(cmd, "waitle")) {
+            /* waitle ADDR VAL [MAX]: run until the 16-bit word at ADDR is <= VAL */
+            unsigned long addr = parse_num(a1), val = parse_num(a2), max = n >= 4 ? parse_num(a3) : 600, i;
+            for (i = 0; i < max; i++) { unsigned long cur = wram[addr] | (wram[addr + 1] << 8); if (cur <= val) break; run_frames(1); }
+            printf("waitle %05lX<=%lu: %s after %lu frames (now %u)\n", addr, val, i < max ? "ok" : "TIMEOUT", i, wram[addr] | (wram[addr + 1] << 8));
+            if (i >= max) rc = 3;
+        }
         else if (!strcmp(cmd, "spam2")) {
             /* spam2 BTNS INTERVAL MAXFRAMES ADDR1 VAL1 ADDR2 VAL2: like spam, stopping once both bytes match */
             char a4[256], a5[256], a6[256], a7[256];

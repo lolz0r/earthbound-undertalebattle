@@ -12,6 +12,7 @@ Piece 2 ("vline"): sheet of 16x16 sprites; sprite 0 has a 2px white line along i
                    (16x16 side-border pieces keep the per-scanline sprite budget low).
 Piece 3 ("gauge"): four 16x16 sprites used by the FIGHT timing bar: red, yellow, green blocks, cursor.
 Piece 4 ("bone"):  16x32 bone bullet pieces (two 16x16: bone top, bone shaft).
+Piece 5 ("minigame"): focus bracket corner, crosshair, rhythm note, spark.
 """
 import os, sys
 
@@ -191,6 +192,81 @@ BONE_SHAFT = from_art([
     "......wwww......",
 ], {"w": WHITE})
 
+
+# ---- minigame sprites (piece 5) ----
+BRACKET = from_art([          # corner bracket, flipped for the other three corners
+    "wwwwwwwwww......",
+    "wwwwwwwwww......",
+    "ww..............",
+    "ww..............",
+    "ww..............",
+    "ww..............",
+    "ww..............",
+    "ww..............",
+    "ww..............",
+    "ww..............",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+], {"w": WHITE})
+CROSSHAIR = from_art([
+    "................",
+    "..bb........bb..",
+    "..b..........b..",
+    "..b...bbbb...b..",
+    "......b..b......",
+    ".......ww.......",
+    ".......ww.......",
+    "......b..b......",
+    "......bbbb......",
+    "................",
+    "..b..........b..",
+    "..bb........bb..",
+    "................",
+    "................",
+    "................",
+    "................",
+], {"b": LIGHTBLUE, "w": WHITE})
+NOTE = from_art([
+    "................",
+    ".........ww.....",
+    ".........www....",
+    ".........w.ww...",
+    ".........w..ww..",
+    ".........w...w..",
+    ".........w......",
+    ".........w......",
+    ".........w......",
+    ".........w......",
+    ".....wwwww......",
+    "....wwwwww......",
+    "...wwwwwww......",
+    "...wwwwww.......",
+    "....wwww........",
+    "................",
+], {"w": WHITE})
+SPARK = from_art([
+    "................",
+    ".......y........",
+    ".......y........",
+    ".......y........",
+    "......yyy.......",
+    "..y...yyy...y...",
+    "...yy.yyy.yy....",
+    ".yyyyyyyyyyyyy..",
+    "...yy.yyy.yy....",
+    "..y...yyy...y...",
+    "......yyy.......",
+    ".......y........",
+    ".......y........",
+    ".......y........",
+    "................",
+    "................",
+], {"y": YELLOW})
+
 def piece_sheet(sprites):
     """4 sprites of 16x16 into a 32x32 piece: (0,0),(16,0),(0,16),(16,16)."""
     p = blank()
@@ -221,6 +297,7 @@ PIECES = [
     piece_vline(),
     piece_sheet([block(RED), block(YELLOW), block(GREEN), CURSOR]),
     piece_sheet([BONE_TOP, BONE_SHAFT, block(BLUE, 4), block(ORANGE, 4)]),
+    piece_sheet([BRACKET, CROSSHAIR, NOTE, SPARK]),      # piece 5: focus brackets, crosshair, rhythm note, spark
 ]
 
 def encode_piece(p):
