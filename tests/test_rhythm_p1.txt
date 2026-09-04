@@ -16,18 +16,19 @@ run 20
 press a 4
 waitmem BH_DP 1 600
 peek BH_DP+0x52 2
-peek BH_DP+0xA0 2
-peek BH_DP+0x54 2
-peek BH_DP+0x6E 2
+peek BH_DP+0x32 2
 peek BH_BULLETS+16 10
 run 12
-shot rp_000
-run 40
-shot rp_040
-run 40
-shot rp_080
+shot rd_000
 run 30
-shot rp_110
+shot rd_030
+run 30
+shot rd_060
+run 30
+shot rd_090
 waitmem BH_DP 0 900
-peek BH_BULLETS+16 10
 peek BH_DP+0x3E 2
+peek BH_DP+0x92 2
+peek BH_DP+0x96 2
+run 120
+peek BATTLERS_TABLE+641 2

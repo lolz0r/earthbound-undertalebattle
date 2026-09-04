@@ -67,10 +67,10 @@ index 37cd3d5e..1b61524f 100644
  # ca65 requires all bin files to be present for generating .dep files, so make sure they're present first
 diff --git a/include/bullet_hell.asm b/include/bullet_hell.asm
 new file mode 100644
-index 00000000..f9cf352d
+index 00000000..9240ee3e
 --- /dev/null
 +++ b/include/bullet_hell.asm
-@@ -0,0 +1,281 @@
+@@ -0,0 +1,292 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase - shared constants.
 +;
@@ -89,7 +89,7 @@ index 00000000..f9cf352d
 +BH_HEART_HALF    = 3           ; half size of the heart's hit box
 +BH_ATTR_BASE     = $3E         ; OAM attribute: priority 3, palette 7
 +BH_OBJ_PALETTE   = $1E0        ; byte offset of OBJ palette 7 inside PALETTES
-+BH_NUM_PIECES    = 8           ; 32x32 tile pieces uploaded to sprite VRAM (a piece that finds no free slot gets tile $FFFF)
++BH_NUM_PIECES    = 9           ; 32x32 tile pieces uploaded to sprite VRAM (a piece that finds no free slot gets tile $FFFF)
 +BH_PIECE_BYTES   = 512
 +
 +; ---- direct page layout (offsets from BH_DP; all fields are 16-bit) ----
@@ -116,10 +116,10 @@ index 00000000..f9cf352d
 +BH_SPEED         = $2C   ; bullet speed scale, 16 = 1.0
 +BH_RESULT        = $2E
 +BH_HEART_SPD     = $30
-+; $32-$3D unused (the piece tile table moved to $B0)
++; $32-$3D: minigame state (see below)
 +BH_DMG_PCT       = $3E   ; damage percent for the action being resolved (0 = unscaled)
 +BH_MOVED         = $50   ; heart moved this frame (blue/orange bullets)
-+BH_MODE          = $52   ; 0 = dodge phase, 1 = FIGHT timing gauge, 2 = rhythm, 3 = focus
++BH_MODE          = $52   ; 0 = dodge phase, 1 = FIGHT timing gauge, 2 rhythm, 3 focus, 4 mash, 5 slots, 6 combo
 +BH_CURSOR_X      = $54   ; gauge cursor x (screen px of the 2px line)
 +BH_FIGHT_STATE   = $56   ; 0 sweeping, 1 pressed (blinking)
 +BH_FIGHT_TIMER   = $58
@@ -148,18 +148,28 @@ index 00000000..f9cf352d
 +BH_SAVED_ROLL    = $98   ; DISABLE_HPPP_ROLLING value to restore after a minigame
 +BH_FORCE_PAT     = $9A   ; test hook: 0 = pattern by action type, 1 = force the physical program, 2 = force the PSI one
 +BH_FORCE_MG      = $9C   ; test hook: 0 = random, 1 gauge, 2 rhythm, 3 focus (attacks); 4 focus block, 5 dodge (enemy attacks)
-+; ---- minigame state ($A0-$AF; initialised by the minigame that uses it) ----
-+; the rhythm game also uses BH_CURSOR_X (lane target x) and BH_FIGHT_DIR (note speed, 12.4);
-+; the focus game uses BH_FIGHT_DIR (closing speed, 12.4); rhythm notes live in the bullet table
-+BH_MG_COUNT      = $A0   ; word: number of notes / focus: 1 = blocking an enemy attack
-+BH_MG_SCORE      = $A2   ; word: rhythm points / focus: result 0 perfect, 1 good, 2 ok, 3 miss
-+BH_MG_FB_TIMER   = $A4   ; word: frames the floating grade label stays
-+BH_MG_FB_KIND    = $A6   ; word: grade shown by the label (0 perfect, 1 good, 2 ok, 3 miss)
-+BH_MG_FB_X       = $A8   ; word: rhythm: lane of the label
-+BH_MG_DIST       = $AA   ; word: focus bracket distance from the centre, 12.4 fixed
-+BH_PIECE_TILE    = $B0   ; 8 words ($B0-$BF): VRAM tile number of each uploaded piece ($FFFF = no free slot)
-+BHR_X            = 0     ; rhythm note tables inside BH_BULLETS (idle during a minigame): 5 words of x, 12.4 fixed
-+BHR_ST           = 16    ; 5 words: lane in the high byte, state in the low byte (0 pending, 1-4 graded, 4 also = unused)
++; ---- minigame state ($32-$3D; initialised by the minigame that uses it) ----
++; the rhythm game also uses BH_FIGHT_DIR (note speed, 12.4); the focus game BH_FIGHT_DIR (closing
++; speed, 12.4); the combo game BH_FIGHT_TIME (next step). Per-note / reel / step tables live in
++; the bullet table (idle during a minigame).
++BH_MG_COUNT      = $32   ; word: notes / reels stopped / steps; focus: 1 = blocking an enemy attack; mash: presses
++BH_MG_SCORE      = $34   ; word: points, fill, correct steps; focus: result 0 perfect, 1 good, 2 ok, 3 miss
++BH_MG_FB_TIMER   = $36   ; word: frames the floating grade label (or a reel bounce) stays
++BH_MG_FB_KIND    = $38   ; word: grade shown by the label (0 perfect, 1 good, 2 ok, 3 miss)
++BH_MG_FB_X       = $3A   ; word: rhythm: lane of the label; slots: reel that bounces
++BH_MG_DIST       = $3C   ; word: focus bracket distance from the centre, 12.4 fixed
++BH_PIECE_TILE    = $A0   ; 9 words ($A0-$B1): VRAM tile number of each uploaded piece ($FFFF = no free slot)
++BHR_D            = 0     ; rhythm: 5 words, distance of each note to its target, 12.4 fixed (negative = past it)
++BHR_ST           = 16    ; rhythm: 5 words, lane in the high byte, state in the low byte (0 pending, 1-4 graded, 4 also = unused)
++BHS_SYM          = 32    ; slots: 3 words, symbol shown by each reel (0-3)
++BHS_STOP         = 40    ; slots: 3 words, 1 once the reel is stopped
++BHC_SEQ          = 48    ; combo: 5 words, lane of each step
++BHC_ST           = 64    ; combo: 5 words, 0 pending, 1 right, 2 wrong, 3 out of time
++BH_MASH_FRAMES   = 150
++BH_MASH_FULL     = 144   ; nine blocks of 16
++BH_SLOTS_STEP    = 6     ; frames per symbol while a reel spins
++BH_SLOTS_FRAMES  = 240   ; the reels stop by themselves afterwards
++BH_COMBO_FRAMES  = 180
 +BH_RHYTHM_BOX_W  = 176
 +BH_RHYTHM_BOX_H  = 88
 +BH_FOCUS_BOX_W   = 112
@@ -255,6 +265,7 @@ index 00000000..f9cf352d
 +BH_TYPE_LBL_OK   = 30
 +BH_TYPE_LBL_MIS  = 31
 +BH_TYPE_LBL_S    = 32
++BH_TYPE_SLOT_CHERRY = 33  ; slot symbols: cherry, bell, seven, star
 +BH_TYPE_THEME1   = 14
 +BH_TYPE_THEME2   = 15
 +BH_TYPE_THEME3   = 16
@@ -577,10 +588,10 @@ index 6375a6d9..905ff417 100644
  INTRO_BG2_BUFFER:
 diff --git a/src/battle/bullet_hell/bh_data.asm b/src/battle/bullet_hell/bh_data.asm
 new file mode 100644
-index 00000000..c8f4121b
+index 00000000..6f37de01
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_data.asm
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,51 @@
 +; Sprite graphics for the bullet-hell dodge phase (generated by tools/gen_bh_gfx.py)
 +BH_TILES:
 +	.INCBIN "bin/bh/bh_tiles.bin"
@@ -622,6 +633,10 @@ index 00000000..c8f4121b
 +	.BYTE 2, 32, 0, 0, 0, 0    ; 30 label OK
 +	.BYTE 2, 34, 0, 0, 0, 0    ; 31 label MIS
 +	.BYTE 5, 32, 0, 0, 0, 0    ; 32 label S
++	.BYTE 8,  0, 0, 0, 0, 0    ; 33 slot cherry
++	.BYTE 8,  2, 0, 0, 0, 0    ; 34 slot bell
++	.BYTE 8, 32, 0, 0, 0, 0    ; 35 slot seven
++	.BYTE 8, 34, 0, 0, 0, 0    ; 36 slot star
 +
 +
 +; colours of the nine FIGHT gauge blocks, left to right
@@ -8203,10 +8218,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..9e13a198
+index 00000000..c437aabc
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,2878 @@
+@@ -0,0 +1,2868 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -10710,19 +10725,9 @@ index 00000000..9e13a198
 +@content:
 +	LDA z:BH_MODE
 +	BEQ @dodge
-+	CMP #2
-+	BEQ @rhythm
-+	CMP #3
-+	BEQ @focus
-+	JSR BH_RENDER_GAUGE
-+	JSR BH_DRAW_BORDER
-+	JMP @done
-+@rhythm:
-+	JSR BH_RENDER_RHYTHM
-+	JSR BH_DRAW_BORDER
-+	JMP @done
-+@focus:
-+	JSR BH_RENDER_FOCUS
++	ASL
++	TAX
++	JSR (.LOWORD(BH_RENDER_TABLE),X)   ; gauge, rhythm, focus, mash, slots, combo
 +	JSR BH_DRAW_BORDER
 +	JMP @done
 +@dodge:
@@ -11087,27 +11092,34 @@ index 00000000..9e13a198
 +	RTS
 diff --git a/src/battle/bullet_hell/bh_minigames.asm b/src/battle/bullet_hell/bh_minigames.asm
 new file mode 100644
-index 00000000..ce2d3343
+index 00000000..b901f1ff
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_minigames.asm
-@@ -0,0 +1,798 @@
+@@ -0,0 +1,1525 @@
 +; ---------------------------------------------------------------------------
-+; Extra minigames, picked at random per action:
-+;   BH_RHYTHM_PHASE - a short rhythm game: four lanes with the A, B, X and Y
-+;                     buttons as targets on the left; notes (the same button
-+;                     icons) scroll in from the right, press the matching
-+;                     button as a note reaches its target. Every press floats a
-+;                     PERFECT / GOOD / OK / MISS label off the lane with its
-+;                     own sound; the strip along the bottom keeps each note's
-+;                     grade. Damage 40-100 % by accuracy, SMAAAASH from 90 %.
++; Extra minigames, picked at random per action. Every graded press floats a
++; PERFECT / GOOD / OK / MISS label (BH_DRAW_LABEL) with its own sound.
++;   BH_RHYTHM_PHASE - the A, B, X and Y buttons sit in the middle of the box in
++;                     their controller arrangement; notes drawn as the same
++;                     icons fly in from the sides (Y from the left, the others
++;                     from the right) and must be answered with their own button
++;                     as they reach it. Damage 40-100 % by accuracy, SMAAAASH
++;                     from 90 %.
 +;   BH_FOCUS_PHASE  - four brackets close in on a target; press A when they
 +;                     frame it. Attacks: 100/85/70/40 % damage, SMAAAASH when
 +;                     perfect. Enemy attacks: a perfect block dodges the blow,
-+;                     good/ok take 50/75 %. The grade floats up as a label.
++;                     good/ok take 50/75 %.
++;   BH_MASH_PHASE   - mash A for 2.5 seconds to fill a nine-block power bar
++;                     that drains all the time; the fill is the damage.
++;   BH_SLOTS_PHASE  - three reels of cherry / bell / seven / star spin; A stops
++;                     them one by one. Three of a kind is a SMAAAASH (three
++;                     sevens hit for 120 %), a pair 85 %, nothing 60 %.
++;   BH_COMBO_PHASE  - five button icons; press them in order before the timer
++;                     bar runs out.
 +; All run inside the engine's direct page, like BH_FIGHT_PHASE.
 +; ---------------------------------------------------------------------------
 +
-+; party physical attack: gauge, rhythm or focus, one in three each
++; party physical attack: one of six games (BH_FORCE_MG: 1 gauge 2 rhythm 3 focus 6 mash 7 slots 8 combo)
 +BH_PICK_ATTACK_GAME:
 +	LDA z:BH_FORCE_MG
 +	BEQ @random
@@ -11115,21 +11127,48 @@ index 00000000..ce2d3343
 +	BEQ @rhythm
 +	CMP #3
 +	BEQ @focus
++	CMP #6
++	BEQ @mash
++	CMP #7
++	BEQ @slots
++	CMP #8
++	BEQ @combo
 +	BRA @gauge
 +@random:
 +	JSL RAND
-+	CMP #85
++	CMP #43
 +	BCC @gauge
-+	CMP #170
++	CMP #86
 +	BCC @rhythm
++	CMP #128
++	BCC @focus
++	CMP #171
++	BCC @mash
++	CMP #213
++	BCC @slots
++@combo:
++	LDA z:BH_PIECE_TILE + 12        ; button icons
++	CMP #$FFFF
++	BEQ @gauge
++	JMP BH_COMBO_PHASE
++@slots:
++	LDA z:BH_PIECE_TILE + 16        ; slot symbols
++	CMP #$FFFF
++	BEQ @gauge
++	JMP BH_SLOTS_PHASE
++@mash:
++	LDA z:BH_PIECE_TILE + 12
++	CMP #$FFFF
++	BEQ @gauge
++	JMP BH_MASH_PHASE
 +@focus:
-+	LDA z:BH_PIECE_TILE + 10        ; the bracket piece must be in VRAM
++	LDA z:BH_PIECE_TILE + 10        ; brackets
 +	CMP #$FFFF
 +	BEQ @gauge
 +	LDA #0
 +	JMP BH_FOCUS_PHASE
 +@rhythm:
-+	LDA z:BH_PIECE_TILE + 12        ; the button icons must be in VRAM
++	LDA z:BH_PIECE_TILE + 12
 +	CMP #$FFFF
 +	BEQ @gauge
 +	JMP BH_RHYTHM_PHASE
@@ -11170,6 +11209,8 @@ index 00000000..ce2d3343
 +	.WORD SFX::CURSOR2, SFX::CURSOR1, SFX::CURSOR3, SFX::CURSOR_INVALID
 +BH_GRADE_BLOCK:
 +	.WORD BH_TYPE_GAUGE_GRN, BH_TYPE_GAUGE_YEL, BH_TYPE_GAUGE_YEL, BH_TYPE_GAUGE_RED
++BH_GRADE_ATK_PCT:               ; attack damage by grade (focus, mash, combo)
++	.WORD 100, 85, 70, 40
 +BH_LABEL_TYPES:                 ; up to three 16 px sprites per label, 0 = end
 +	.BYTE BH_TYPE_LBL_PER, BH_TYPE_LBL_FEC, BH_TYPE_LBL_T, 0
 +	.BYTE BH_TYPE_LBL_GOO, BH_TYPE_LBL_D, 0, 0
@@ -11177,6 +11218,130 @@ index 00000000..ce2d3343
 +	.BYTE BH_TYPE_LBL_MIS, BH_TYPE_LBL_S, 0, 0
 +BH_LANE_BUTTON:
 +	.WORD PAD::A_BUTTON, PAD::B_BUTTON, PAD::X_BUTTON, PAD::Y_BUTTON
++BH_LANE_TYPE:                   ; button icon per lane
++	.WORD BH_TYPE_BUTTON_A, BH_TYPE_BUTTON_B, BH_TYPE_BUTTON_X, BH_TYPE_BUTTON_Y
++; the SNES pad diamond: A right, B bottom, X top, Y left (sprite top-left offsets from the box centre)
++BH_LANE_TX:
++	.WORD 10, .LOWORD(-8), .LOWORD(-8), .LOWORD(-26)
++BH_LANE_TY:
++	.WORD .LOWORD(-8), 10, .LOWORD(-26), .LOWORD(-8)
++BH_LANE_DIR:                    ; notes fly in against this direction: -1 = from the right, +1 = from the left
++	.WORD .LOWORD(-1), .LOWORD(-1), .LOWORD(-1), 1
++BH_LANE_LBL_X:                  ; where a lane's grade label starts (offset from the button's top-left)
++	.WORD 20, .LOWORD(-14), .LOWORD(-14), .LOWORD(-52)
++BH_LANE_LBL_Y:
++	.WORD 0, 18, .LOWORD(-18), 0
++BH_RENDER_TABLE:
++	.WORD 0, .LOWORD(BH_RENDER_GAUGE), .LOWORD(BH_RENDER_RHYTHM), .LOWORD(BH_RENDER_FOCUS)
++	.WORD .LOWORD(BH_RENDER_MASH), .LOWORD(BH_RENDER_SLOTS), .LOWORD(BH_RENDER_COMBO)
++
++; the attack outcome of a grade in A: damage percent, SMAAAASH when perfect, the usual hit roll on a miss
++BH_GRADE_ATTACK:
++	ASL
++	TAX
++	LDA f:BH_GRADE_ATK_PCT,X
++	STA z:BH_DMG_PCT
++	LDA #2
++	STA z:BH_FIGHT_RESULT
++	STZ z:BH_FORCE
++	CPX #6
++	BEQ @done
++	LDA #1
++	STA z:BH_FORCE
++	CPX #0
++	BNE @done
++	STA z:BH_FIGHT_RESULT
++@done:
++	RTS
++
++; A = grade -> the floating label and its sound (label kind/timer; the caller places it)
++BH_GRADE_FEEDBACK:
++	STA z:BH_MG_FB_KIND
++	ASL
++	TAX
++	LDA #36
++	STA z:BH_MG_FB_TIMER
++	LDA f:BH_GRADE_SFX,X
++	JMP BH_MG_SOUND
++
++; box centre -> BH_PAT_WAIT (x), BH_LOOP_CNT (y): pattern fields, idle during a minigame
++BH_MG_CENTRE:
++	LDA z:BH_BOX_X0
++	CLC
++	ADC z:BH_BOX_X1
++	LSR
++	STA z:BH_PAT_WAIT
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC z:BH_BOX_Y1
++	LSR
++	STA z:BH_LOOP_CNT
++	RTS
++
++; the label floats up from (BH_T0, BH_T1) over BH_MG_FB_TIMER frames
++BH_MG_FLOAT_LABEL:
++	LDA z:BH_MG_FB_TIMER
++	BEQ @none
++	LDA #36
++	SEC
++	SBC z:BH_MG_FB_TIMER
++	LSR
++	LSR
++	STA z:BH_T2
++	LDA z:BH_T1
++	SEC
++	SBC z:BH_T2
++	STA z:BH_T1
++	LDA z:BH_MG_FB_KIND
++	JMP BH_DRAW_LABEL
++@none:
++	RTS
++
++; the common end of a minigame: close the box, let the enemies come back, resume the HP roll
++BH_MG_FINISH:
++	STZ z:BH_YSHIFT_TGT
++	JSR BH_BOX_CLOSE
++	STZ z:BH_MODE
++@ramp:
++	JSR BH_TICK
++	JSR BH_RAMP_SHIFT
++	LDA z:BH_YSHIFT
++	BNE @ramp
++	JMP BH_ROLL_RESTORE
++
++; the common start: box BH_T0 x BH_T1, mode in A, counters cleared, box opened
++BH_MG_START:
++	STA z:BH_MODE
++	JSR BH_ROLL_FREEZE
++	JSR BH_SET_BOX
++	STZ z:BH_FIGHT_STATE
++	STZ z:BH_FIGHT_TIMER
++	STZ z:BH_FRAME
++	STZ z:BH_MG_SCORE
++	STZ z:BH_MG_COUNT
++	STZ z:BH_MG_FB_TIMER
++	LDA #0
++	JSR BH_CALC_YSHIFT
++	JSR BH_UPLOAD_GFX
++	JMP BH_BOX_OPEN
++
++; one frame of a minigame loop: tick, feedback timer; returns with Z set once the wind-down ended
++BH_MG_FRAME:
++	JSR BH_TICK
++	JSR BH_RAMP_SHIFT
++	INC z:BH_FRAME
++	LDA z:BH_MG_FB_TIMER
++	BEQ :+
++	DEC z:BH_MG_FB_TIMER
++:	LDA z:BH_FIGHT_STATE
++	BEQ @running
++	DEC z:BH_FIGHT_TIMER
++	BNE @running
++	LDA #0
++	RTS
++@running:
++	LDA #1
++	RTS
 +
 +; ---------------------------------------------------------------------------
 +; BH_DRAW_LABEL - A = grade, BH_T0/BH_T1 = top-left -> PERFECT/GOOD/OK/MISS
@@ -11188,7 +11353,7 @@ index 00000000..ce2d3343
 +	BEQ @block
 +	ASL
 +	ASL
-+	STA z:BH_LOOP_PC        ; table index (pattern fields are idle during a minigame)
++	STA z:BH_LOOP_PC        ; table index
 +@sprite:
 +	LDX z:BH_LOOP_PC
 +	LDA f:BH_LABEL_TYPES,X
@@ -11213,32 +11378,35 @@ index 00000000..ce2d3343
 +	JSR BH_TILE_FOR_TYPE
 +	JMP BH_OAM_PUT
 +
++; A = lane -> BH_T0/BH_T1 = its target sprite's top-left (BH_MG_CENTRE must have run)
++BH_LANE_TARGET:
++	ASL
++	TAX
++	LDA f:BH_LANE_TX,X
++	CLC
++	ADC z:BH_PAT_WAIT
++	STA z:BH_T0
++	LDA f:BH_LANE_TY,X
++	CLC
++	ADC z:BH_LOOP_CNT
++	STA z:BH_T1
++	RTS
++
 +; ===========================================================================
 +; BH_RHYTHM_PHASE
 +; ===========================================================================
 +BH_RHYTHM_PHASE:
-+	JSR BH_ROLL_FREEZE
 +	LDA #BH_RHYTHM_BOX_W
 +	STA z:BH_T0
 +	LDA #BH_RHYTHM_BOX_H
 +	STA z:BH_T1
-+	JSR BH_SET_BOX
 +	LDA #2
-+	STA z:BH_MODE
-+	STZ z:BH_FIGHT_STATE
-+	STZ z:BH_FIGHT_TIMER
-+	STZ z:BH_FRAME
-+	STZ z:BH_MG_SCORE
-+	STZ z:BH_MG_FB_TIMER
++	JSR BH_MG_START_NOOPEN
 +	LDA #20
 +	STA z:BH_DMG_PCT        ; whiffed unless a note is hit
 +	LDA #2
 +	STA z:BH_FIGHT_RESULT
 +	STA z:BH_FORCE
-+	LDA z:BH_BOX_X0
-+	CLC
-+	ADC #8
-+	STA z:BH_CURSOR_X       ; the lane targets' x: a note is hit when it overlaps its target
 +	JSL RAND
 +	AND #$0001
 +	CLC
@@ -11249,10 +11417,8 @@ index 00000000..ce2d3343
 +	CLC
 +	ADC #32
 +	STA z:BH_FIGHT_DIR      ; 2.0-2.9 px per frame
-+	; notes start beyond the right edge, 40-71 px apart, each in a random lane
-+	LDA z:BH_BOX_X1
-+	CLC
-+	ADC #8
++	; the first note is 110 px out, the next ones 40-71 px further, each in a random lane
++	LDA #110
 +	STA z:BH_T2
 +	LDX #0
 +	STZ z:BH_T3
@@ -11262,7 +11428,7 @@ index 00000000..ce2d3343
 +	ASL
 +	ASL
 +	ASL
-+	STA BH_BULLETS + BHR_X,X
++	STA BH_BULLETS + BHR_D,X
 +	JSL RAND
 +	AND #$001F
 +	CLC
@@ -11289,36 +11455,29 @@ index 00000000..ce2d3343
 +	INX
 +	CPX #10
 +	BCC @note
-+	LDA #0
-+	JSR BH_CALC_YSHIFT
-+	JSR BH_UPLOAD_GFX
 +	JSR BH_BOX_OPEN
 +@loop:
-+	JSR BH_TICK
-+	JSR BH_RAMP_SHIFT
-+	INC z:BH_FRAME
-+	LDA z:BH_MG_FB_TIMER
-+	BEQ :+
-+	DEC z:BH_MG_FB_TIMER
-+:	LDA z:BH_FIGHT_STATE
++	JSR BH_MG_FRAME
++	BNE @alive
++	JMP @result
++@alive:
++	LDA z:BH_FIGHT_STATE
 +	BEQ @running
-+	JMP @winddown
++	JMP @loop
 +@running:
-+	; ---- move the pending notes; 18 px past the targets a note is missed ----
++	; ---- the notes approach; 18 px past its button a note is missed ----
 +	LDX #0
 +@move:
 +	LDA BH_BULLETS + BHR_ST,X
 +	AND #$00FF
 +	BNE @move_next
-+	LDA BH_BULLETS + BHR_X,X
++	LDA BH_BULLETS + BHR_D,X
 +	SEC
 +	SBC z:BH_FIGHT_DIR
-+	STA BH_BULLETS + BHR_X,X
-+	JSR BH_ASR4
++	STA BH_BULLETS + BHR_D,X
 +	CLC
-+	ADC #BH_NOTE_OK
-+	CMP z:BH_CURSOR_X
-+	BCS @move_next
++	ADC #BH_NOTE_OK * 16
++	BPL @move_next
 +	LDA #3
 +	JSR BH_RHYTHM_GRADE
 +@move_next:
@@ -11326,7 +11485,7 @@ index 00000000..ce2d3343
 +	INX
 +	CPX #10
 +	BCC @move
-+	; ---- a button press judges the pending note nearest the targets ----
++	; ---- a button press judges the pending note nearest its button ----
 +	LDA PAD_PRESS
 +	AND #PAD::A_BUTTON | PAD::B_BUTTON | PAD::X_BUTTON | PAD::Y_BUTTON
 +	BNE @press
@@ -11342,10 +11501,8 @@ index 00000000..ce2d3343
 +	LDA BH_BULLETS + BHR_ST,X
 +	AND #$00FF
 +	BNE @find_next
-+	LDA BH_BULLETS + BHR_X,X
++	LDA BH_BULLETS + BHR_D,X
 +	JSR BH_ASR4
-+	SEC
-+	SBC z:BH_CURSOR_X
 +	JSR BH_ABS
 +	CMP z:BH_T5
 +	BCS @find_next
@@ -11360,8 +11517,7 @@ index 00000000..ce2d3343
 +	BMI @check              ; no pending note
 +	LDA z:BH_T5
 +	CMP #BH_NOTE_OK + 1
-+	BCS @check              ; nothing near the targets: the press is ignored
-+	; the note's own button must be among the pressed ones
++	BCS @check              ; nothing near its button: the press is ignored
 +	LDA BH_BULLETS + BHR_ST,X
 +	XBA
 +	AND #$0003
@@ -11411,10 +11567,8 @@ index 00000000..ce2d3343
 +	STA z:BH_FIGHT_TIMER
 +@loop_j:
 +	JMP @loop
-+@winddown:
-+	DEC z:BH_FIGHT_TIMER
-+	BNE @loop_j
-+	; ---- result: 40..100 % of the damage by score, SMAAAASH from 90 % ----
++@result:
++	; ---- 40..100 % of the damage by points, SMAAAASH from 90 % ----
 +	LDA z:BH_MG_SCORE
 +	BEQ @end                ; nothing hit: the 20 % whiff and the forced miss stand
 +	LDA #1
@@ -11437,78 +11591,60 @@ index 00000000..ce2d3343
 +	LDA #1
 +	STA z:BH_FIGHT_RESULT
 +@end:
-+	STZ z:BH_YSHIFT_TGT
-+	JSR BH_BOX_CLOSE
-+	STZ z:BH_MODE
-+@ramp:
-+	JSR BH_TICK
-+	JSR BH_RAMP_SHIFT
-+	LDA z:BH_YSHIFT
-+	BNE @ramp
-+	JMP BH_ROLL_RESTORE
++	JMP BH_MG_FINISH
++
++; like BH_MG_START but the caller opens the box (it fills tables first)
++BH_MG_START_NOOPEN:
++	STA z:BH_MODE
++	JSR BH_ROLL_FREEZE
++	JSR BH_SET_BOX
++	STZ z:BH_FIGHT_STATE
++	STZ z:BH_FIGHT_TIMER
++	STZ z:BH_FRAME
++	STZ z:BH_MG_SCORE
++	STZ z:BH_MG_COUNT
++	STZ z:BH_MG_FB_TIMER
++	LDA #0
++	JSR BH_CALC_YSHIFT
++	JMP BH_UPLOAD_GFX
 +
 +; X = note slot (2i), A = grade -> the note's state, the score, a floating label and a sound
 +BH_RHYTHM_GRADE:
-+	STA z:BH_MG_FB_KIND
++	PHX
++	STA z:BH_T1
 +	INC
-+	STA z:BH_T1             ; state 1-4
++	STA z:BH_T2             ; state 1-4
 +	LDA BH_BULLETS + BHR_ST,X
 +	AND #$FF00
-+	ORA z:BH_T1
++	ORA z:BH_T2
 +	STA BH_BULLETS + BHR_ST,X
 +	XBA
 +	AND #$0003
-+	STA z:BH_MG_FB_X        ; the label floats off this lane
-+	LDA #24
-+	STA z:BH_MG_FB_TIMER
-+	PHX
-+	LDA z:BH_MG_FB_KIND
++	STA z:BH_MG_FB_X        ; the label floats off this lane's button
++	LDA z:BH_T1
 +	ASL
 +	TAX
 +	LDA f:BH_GRADE_POINTS,X
 +	CLC
 +	ADC z:BH_MG_SCORE
 +	STA z:BH_MG_SCORE
-+	LDA f:BH_GRADE_SFX,X
-+	JSR BH_MG_SOUND
++	LDA z:BH_T1
++	JSR BH_GRADE_FEEDBACK
 +	PLX
-+	RTS
-+
-+; A = lane -> A = screen y of that lane (17 px pitch from the box top)
-+BH_LANE_Y:
-+	STA z:BH_SPAWN_MODE     ; scratch that survives BH_TILE_FOR_TYPE (BH_T2 holds the tile)
-+	ASL
-+	ASL
-+	ASL
-+	ASL
-+	CLC
-+	ADC z:BH_SPAWN_MODE
-+	CLC
-+	ADC z:BH_BOX_Y0
-+	INC
 +	RTS
 +
 +; ---------------------------------------------------------------------------
 +BH_RENDER_RHYTHM:
-+	; the four lane targets
++	JSR BH_MG_CENTRE
++	; the four buttons in the middle
 +	LDX #0
 +@target:
 +	STX z:BH_T6
-+	TXA
++	LDA f:BH_LANE_TYPE,X
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T6
 +	LSR
-+	STA z:BH_T7
-+	CLC
-+	ADC #BH_TYPE_BUTTON_A
-+	CPX #2
-+	BCC :+                  ; lanes 1-3 are types 22-24
-+	CLC
-+	ADC #BH_TYPE_BUTTON_B - BH_TYPE_BUTTON_A - 1
-+:	JSR BH_TILE_FOR_TYPE
-+	LDA z:BH_CURSOR_X
-+	STA z:BH_T0
-+	LDA z:BH_T7
-+	JSR BH_LANE_Y
-+	STA z:BH_T1
++	JSR BH_LANE_TARGET
 +	JSR BH_OAM_PUT
 +	LDX z:BH_T6
 +	INX
@@ -11522,8 +11658,34 @@ index 00000000..ce2d3343
 +	AND #$00FF
 +	BNE @note_next
 +	STX z:BH_T6
-+	LDA BH_BULLETS + BHR_X,X
++	LDA BH_BULLETS + BHR_ST,X
++	XBA
++	AND #$0003
++	STA z:BH_T7             ; lane
++	ASL
++	TAX
++	LDA f:BH_LANE_TYPE,X
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T7
++	JSR BH_LANE_TARGET      ; T0/T1 = the button; the note sits d px out along the lane
++	LDX z:BH_T6
++	LDA BH_BULLETS + BHR_D,X
 +	JSR BH_ASR4
++	STA z:BH_T5
++	LDA z:BH_T7
++	ASL
++	TAX
++	LDA f:BH_LANE_DIR,X
++	BMI @from_right
++	LDA z:BH_T0
++	SEC
++	SBC z:BH_T5
++	BRA @have_x
++@from_right:
++	LDA z:BH_T0
++	CLC
++	ADC z:BH_T5
++@have_x:
 +	STA z:BH_T0
 +	CLC
 +	ADC #16
@@ -11532,20 +11694,6 @@ index 00000000..ce2d3343
 +	LDA z:BH_T0
 +	CMP z:BH_BOX_X0
 +	BCC @note_restore
-+	LDA BH_BULLETS + BHR_ST,X
-+	XBA
-+	AND #$0003
-+	STA z:BH_T7
-+	CLC
-+	ADC #BH_TYPE_BUTTON_A
-+	LDX z:BH_T7
-+	BEQ :+
-+	CLC
-+	ADC #BH_TYPE_BUTTON_B - BH_TYPE_BUTTON_A - 1
-+:	JSR BH_TILE_FOR_TYPE
-+	LDA z:BH_T7
-+	JSR BH_LANE_Y
-+	STA z:BH_T1
 +	JSR BH_OAM_PUT
 +@note_restore:
 +	LDX z:BH_T6
@@ -11554,27 +11702,25 @@ index 00000000..ce2d3343
 +	INX
 +	CPX #10
 +	BCC @note
-+	; the grade label floating up beside the lane's target
++	; the grade label floating up from the graded lane's button
 +	LDA z:BH_MG_FB_TIMER
 +	BEQ @strip
-+	LDA z:BH_CURSOR_X
-+	CLC
-+	ADC #20
-+	STA z:BH_T0
-+	LDA #24
-+	SEC
-+	SBC z:BH_MG_FB_TIMER
-+	LSR
-+	STA z:BH_T1
 +	LDA z:BH_MG_FB_X
-+	JSR BH_LANE_Y
-+	SEC
-+	SBC z:BH_T1
++	JSR BH_LANE_TARGET
++	LDA z:BH_MG_FB_X
++	ASL
++	TAX
++	LDA z:BH_T0
++	CLC
++	ADC f:BH_LANE_LBL_X,X
++	STA z:BH_T0
++	LDA z:BH_T1
++	CLC
++	ADC f:BH_LANE_LBL_Y,X
 +	STA z:BH_T1
-+	LDA z:BH_MG_FB_KIND
-+	JSR BH_DRAW_LABEL
++	JSR BH_MG_FLOAT_LABEL
 +@strip:
-+	; results along the bottom: green / yellow / red block per graded note
++	; results in the top-left corner: green / yellow / red block per graded note
 +	LDX #0
 +@res:
 +	TXA
@@ -11600,11 +11746,10 @@ index 00000000..ce2d3343
 +	CLC
 +	ADC z:BH_BOX_X0
 +	CLC
-+	ADC #28
++	ADC #4
 +	STA z:BH_T0
-+	LDA z:BH_BOX_Y1
-+	SEC
-+	SBC #17
++	LDA z:BH_BOX_Y0
++	INC
 +	STA z:BH_T1
 +	JSR BH_OAM_PUT
 +	LDX z:BH_T6
@@ -11620,19 +11765,15 @@ index 00000000..ce2d3343
 +; BH_FOCUS_PHASE - A = 0: attack (crosshair, damage bonus)  1: block an enemy
 +; ===========================================================================
 +BH_FOCUS_PHASE:
-+	STA z:BH_MG_COUNT
-+	JSR BH_ROLL_FREEZE
++	PHA
 +	LDA #BH_FOCUS_BOX_W
 +	STA z:BH_T0
 +	LDA #BH_FOCUS_BOX_H
 +	STA z:BH_T1
-+	JSR BH_SET_BOX
 +	LDA #3
-+	STA z:BH_MODE
-+	STZ z:BH_FIGHT_STATE
-+	STZ z:BH_FIGHT_TIMER
-+	STZ z:BH_FRAME
-+	STZ z:BH_MG_FB_TIMER
++	JSR BH_MG_START_NOOPEN
++	PLA
++	STA z:BH_MG_COUNT       ; 1 = block
 +	LDA #3
 +	STA z:BH_MG_SCORE       ; a miss until proven otherwise
 +	LDA #44 * 16
@@ -11656,19 +11797,12 @@ index 00000000..ce2d3343
 +	LDA #100
 +	STA z:BH_DMG_PCT
 +@init_done:
-+	LDA #0
-+	JSR BH_CALC_YSHIFT
-+	JSR BH_UPLOAD_GFX
 +	JSR BH_BOX_OPEN
 +@loop:
-+	JSR BH_TICK
-+	JSR BH_RAMP_SHIFT
-+	INC z:BH_FRAME
-+	LDA z:BH_MG_FB_TIMER
-+	BEQ :+
-+	DEC z:BH_MG_FB_TIMER
-+:	LDA z:BH_FIGHT_STATE
-+	BNE @winddown
++	JSR BH_MG_FRAME
++	BEQ @end
++	LDA z:BH_FIGHT_STATE
++	BNE @loop
 +	LDA z:BH_FRAME
 +	CMP #12
 +	BCC @loop               ; the brackets hold still for a moment first
@@ -11710,47 +11844,26 @@ index 00000000..ce2d3343
 +@resolve:
 +	JSR BH_FOCUS_RESOLVE
 +	BRA @loop
-+@winddown:
-+	DEC z:BH_FIGHT_TIMER
-+	BNE @loop
-+	STZ z:BH_YSHIFT_TGT
-+	JSR BH_BOX_CLOSE
-+	STZ z:BH_MODE
-+@ramp:
-+	JSR BH_TICK
-+	JSR BH_RAMP_SHIFT
-+	LDA z:BH_YSHIFT
-+	BNE @ramp
-+	JMP BH_ROLL_RESTORE
++@end:
++	JMP BH_MG_FINISH
 +
 +; A = result (0 perfect, 1 good, 2 ok, 3 miss): label, sound and the outcome
 +BH_FOCUS_RESOLVE:
 +	STA z:BH_MG_SCORE
-+	STA z:BH_MG_FB_KIND
-+	ASL
-+	TAX
++	JSR BH_GRADE_FEEDBACK
 +	LDA #1
 +	STA z:BH_FIGHT_STATE
 +	LDA #36
 +	STA z:BH_FIGHT_TIMER
-+	STA z:BH_MG_FB_TIMER
-+	LDA f:BH_GRADE_SFX,X
-+	JSR BH_MG_SOUND
 +	LDA z:BH_MG_COUNT
 +	BNE @block
-+	; attack: 100 / 85 / 70 / 40 %, a SMAAAASH when perfect; only a miss keeps the usual hit roll
-+	LDA f:BH_FOCUS_ATK_PCT,X
-+	STA z:BH_DMG_PCT
-+	CPX #6
-+	BEQ @done
-+	LDA #1
-+	STA z:BH_FORCE
-+	CPX #0
-+	BNE @done
-+	STA z:BH_FIGHT_RESULT   ; 1 = SMAAAASH
-+	RTS
++	LDA z:BH_MG_SCORE
++	JMP BH_GRADE_ATTACK
 +@block:
 +	; enemy attack: dodged / 50 % / 75 % / 100 %
++	LDA z:BH_MG_SCORE
++	ASL
++	TAX
 +	LDA f:BH_FOCUS_DEF_PCT,X
 +	STA z:BH_DMG_PCT
 +	BNE @done
@@ -11758,23 +11871,12 @@ index 00000000..ce2d3343
 +@done:
 +	RTS
 +
-+BH_FOCUS_ATK_PCT:
-+	.WORD 100, 85, 70, 40
 +BH_FOCUS_DEF_PCT:
 +	.WORD 0, 50, 75, 100
 +
 +; ---------------------------------------------------------------------------
 +BH_RENDER_FOCUS:
-+	LDA z:BH_BOX_X0
-+	CLC
-+	ADC z:BH_BOX_X1
-+	LSR
-+	STA z:BH_PAT_WAIT       ; centre x (pattern fields are idle during a minigame; BH_T5 is not safe across BH_TILE_FOR_TYPE)
-+	LDA z:BH_BOX_Y0
-+	CLC
-+	ADC z:BH_BOX_Y1
-+	LSR
-+	STA z:BH_LOOP_CNT       ; centre y
++	JSR BH_MG_CENTRE
 +	; the target: heart (block) or crosshair (attack); a spark once a perfect press landed
 +	LDA z:BH_FIGHT_STATE
 +	BEQ @target
@@ -11868,27 +11970,657 @@ index 00000000..ce2d3343
 +	STA z:BH_T4
 +	JSR BH_OAM_PUT
 +	; the grade label floating up above the target
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #22
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC #28
++	STA z:BH_T1
++	JMP BH_MG_FLOAT_LABEL
++
++; ===========================================================================
++; BH_MASH_PHASE - mash A: +14 per press, -1 per frame, nine blocks of 16
++; ===========================================================================
++BH_MASH_PHASE:
++	LDA #BH_FIGHT_BOX_W
++	STA z:BH_T0
++	LDA #64
++	STA z:BH_T1
++	LDA #4
++	JSR BH_MG_START
++	LDA #20
++	STA z:BH_DMG_PCT        ; a whiff until a press
++	LDA #2
++	STA z:BH_FIGHT_RESULT
++	STA z:BH_FORCE
++@loop:
++	JSR BH_MG_FRAME
++	BNE @alive
++	JMP @end
++@alive:
++	LDA z:BH_FIGHT_STATE
++	BNE @loop
++	; drain
++	LDA z:BH_MG_SCORE
++	BEQ :+
++	DEC z:BH_MG_SCORE
++:	LDA PAD_PRESS
++	AND #PAD::A_BUTTON
++	BEQ @no_press
++	INC z:BH_MG_COUNT
++	LDA z:BH_MG_SCORE
++	CLC
++	ADC #14
++	CMP #BH_MASH_FULL
++	BCC @store
++	LDA #BH_MASH_FULL
++	PHA
++	LDA #SFX::CURSOR2       ; the bar is full
++	JSR BH_MG_SOUND
++	PLA
++	BRA @stored
++@store:
++	PHA
++	LDA z:BH_MG_COUNT
++	AND #$0003
++	BNE :+
++	LDA #SFX::CURSOR1       ; a tick every fourth press
++	JSR BH_MG_SOUND
++:	PLA
++@stored:
++	STA z:BH_MG_SCORE
++@no_press:
++	LDA z:BH_FRAME
++	CMP #BH_MASH_FRAMES
++	BCC @loop
++	; ---- time is up: grade the fill ----
++	LDA z:BH_MG_COUNT
++	BNE :+
++	LDA #3                  ; never pressed: the whiff stands, say so
++	JSR BH_GRADE_FEEDBACK
++	BRA @finish
++:
++	LDA z:BH_MG_SCORE
++	CMP #130
++	BCS @g0
++	CMP #90
++	BCS @g1
++	CMP #40
++	BCS @g2
++	LDA #3
++	BRA @grade
++@g0:
++	LDA #0
++	BRA @grade
++@g1:
++	LDA #1
++	BRA @grade
++@g2:
++	LDA #2
++@grade:
++	PHA
++	JSR BH_GRADE_ATTACK
++	PLA
++	JSR BH_GRADE_FEEDBACK
++@finish:
++	LDA #1
++	STA z:BH_FIGHT_STATE
++	LDA #36
++	STA z:BH_FIGHT_TIMER
++	JMP @loop
++@end:
++	JMP BH_MG_FINISH
++
++; ---------------------------------------------------------------------------
++BH_RENDER_MASH:
++	JSR BH_MG_CENTRE
++	; the nine-block bar (red, yellow, green thirds), filled blocks only
++	LDA z:BH_LOOP_CNT
++	CLC
++	ADC #6
++	STA z:BH_T7             ; bar y
++	LDX #0
++@block:
++	STX z:BH_T6
++	TXA
++	ASL
++	ASL
++	ASL                     ; 16 * i
++	CLC
++	ADC #16
++	CMP z:BH_MG_SCORE
++	BEQ :+
++	BCS @bar_done           ; not filled this far
++:	LDA #BH_TYPE_GAUGE_RED
++	CPX #6
++	BCC :+
++	LDA #BH_TYPE_GAUGE_YEL
++	CPX #12
++	BCC :+
++	LDA #BH_TYPE_GAUGE_GRN
++:	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T6
++	ASL
++	ASL
++	ASL                     ; 16 * i
++	CLC
++	ADC z:BH_PAT_WAIT
++	SEC
++	SBC #72
++	STA z:BH_T0
++	LDA z:BH_T7
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	LDX z:BH_T6
++	INX
++	INX
++	CPX #18
++	BCC @block
++@bar_done:
++	; the A button bouncing above the bar while the game runs, a spark once the bar is full
++	LDA z:BH_FIGHT_STATE
++	BNE @label
++	LDA #BH_TYPE_BUTTON_A
++	LDX z:BH_MG_SCORE
++	CPX #BH_MASH_FULL
++	BNE :+
++	LDA #BH_TYPE_SPARK
++:	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #8
++	STA z:BH_T0
++	LDA z:BH_FRAME
++	LSR
++	LSR
++	AND #$0003              ; 0..3 bounce
++	STA z:BH_T1
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC #18
++	CLC
++	ADC z:BH_T1
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@label:
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #22
++	STA z:BH_T0
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #4
++	STA z:BH_T1
++	JMP BH_MG_FLOAT_LABEL
++
++; ===========================================================================
++; BH_SLOTS_PHASE - three reels, A stops the next spinning one
++; ===========================================================================
++BH_SLOTS_PHASE:
++	LDA #128
++	STA z:BH_T0
++	LDA #64
++	STA z:BH_T1
++	LDA #5
++	JSR BH_MG_START_NOOPEN
++	LDA #1
++	STA z:BH_FORCE          ; the attack always connects; the reels set the damage
++	LDX #0
++@reel:
++	JSL RAND
++	AND #$0003
++	STA BH_BULLETS + BHS_SYM,X
++	STZ BH_BULLETS + BHS_STOP,X
++	INX
++	INX
++	CPX #6
++	BCC @reel
++	JSR BH_BOX_OPEN
++@loop:
++	JSR BH_MG_FRAME
++	BNE @alive
++	JMP @end
++@alive:
++	LDA z:BH_FIGHT_STATE
++	BNE @loop
++	; spin: a reel advances every BH_SLOTS_STEP frames, the reels staggered by two
++	LDX #0
++@spin:
++	LDA BH_BULLETS + BHS_STOP,X
++	BNE @spin_next
++	TXA
++	CLC
++	ADC z:BH_FRAME
++	STA z:BH_T0
++	LDA #0
++@mod:
++	LDA z:BH_T0
++	SEC
++	SBC #BH_SLOTS_STEP
++	STA z:BH_T0
++	BPL @mod
++	CLC
++	ADC #BH_SLOTS_STEP      ; frame mod 6
++	BNE @spin_next
++	LDA BH_BULLETS + BHS_SYM,X
++	INC
++	AND #$0003
++	STA BH_BULLETS + BHS_SYM,X
++@spin_next:
++	INX
++	INX
++	CPX #6
++	BCC @spin
++	; A (or the time limit) stops the next reel
++	LDA PAD_PRESS
++	AND #PAD::A_BUTTON
++	BNE @stop
++	LDA z:BH_FRAME
++	CMP #BH_SLOTS_FRAMES
++	BCC @loop
++@stop:
++	LDA z:BH_MG_COUNT
++	ASL
++	TAX
++	LDA #1
++	STA BH_BULLETS + BHS_STOP,X
++	TXA
++	LSR
++	STA z:BH_MG_FB_X        ; that reel bounces
++	LDA #12
++	STA z:BH_MG_FB_TIMER
++	LDA #SFX::CURSOR1
++	JSR BH_MG_SOUND
++	INC z:BH_MG_COUNT
++	LDA z:BH_MG_COUNT
++	CMP #3
++	BEQ @all_stopped
++	JMP @loop
++@all_stopped:
++	; three of a kind: perfect (sevens 120 %); a pair: good; nothing: ok (60 %)
++	LDA BH_BULLETS + BHS_SYM + 0
++	CMP BH_BULLETS + BHS_SYM + 2
++	BNE @not_three
++	CMP BH_BULLETS + BHS_SYM + 4
++	BNE @pair
++	LDA #0
++	JSR BH_GRADE_ATTACK
++	LDA BH_BULLETS + BHS_SYM + 0
++	CMP #2                  ; seven
++	BNE @fb0
++	LDA #120
++	STA z:BH_DMG_PCT
++@fb0:
++	LDA #0
++	BRA @feedback
++@not_three:
++	CMP BH_BULLETS + BHS_SYM + 4
++	BEQ @pair
++	LDA BH_BULLETS + BHS_SYM + 2
++	CMP BH_BULLETS + BHS_SYM + 4
++	BEQ @pair
++	LDA #2
++	JSR BH_GRADE_ATTACK
++	LDA #60
++	STA z:BH_DMG_PCT
++	LDA #1
++	STA z:BH_FORCE
++	LDA #2
++	BRA @feedback
++@pair:
++	LDA #1
++	JSR BH_GRADE_ATTACK
++	LDA #1
++@feedback:
++	JSR BH_GRADE_FEEDBACK
++	LDA #1
++	STA z:BH_FIGHT_STATE
++	LDA #40
++	STA z:BH_FIGHT_TIMER
++	JMP @loop
++@end:
++	JMP BH_MG_FINISH
++
++; ---------------------------------------------------------------------------
++BH_RENDER_SLOTS:
++	JSR BH_MG_CENTRE
++	LDX #0
++@reel:
++	STX z:BH_T6
++	LDA BH_BULLETS + BHS_SYM,X
++	CLC
++	ADC #BH_TYPE_SLOT_CHERRY
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T6             ; 2r
++	ASL
++	ASL
++	ASL
++	ASL                     ; 32 r
++	CLC
++	ADC z:BH_PAT_WAIT
++	SEC
++	SBC #40
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC #8
++	STA z:BH_T1
++	; a spinning reel jitters, a freshly stopped one bounces
++	LDX z:BH_T6
++	LDA BH_BULLETS + BHS_STOP,X
++	BNE @stopped
++	LDA z:BH_FRAME
++	AND #$0002
++	BEQ @put
++	INC z:BH_T1
++	BRA @put
++@stopped:
 +	LDA z:BH_MG_FB_TIMER
++	BEQ @put
++	LDA z:BH_T6
++	LSR
++	CMP z:BH_MG_FB_X
++	BNE @put
++	LDA z:BH_MG_FB_TIMER
++	LSR
++	LSR
++	STA z:BH_T5
++	LDA z:BH_T1
++	SEC
++	SBC z:BH_T5
++	STA z:BH_T1
++@put:
++	JSR BH_OAM_PUT
++	LDX z:BH_T6
++	INX
++	INX
++	CPX #6
++	BCC @reel
++	; the cursor line under the reel that stops next
++	LDA z:BH_FIGHT_STATE
++	BNE @label
++	LDA z:BH_MG_COUNT
++	CMP #3
++	BCS @label
++	LDA z:BH_FRAME
++	AND #$0008
++	BNE @label
++	LDA #BH_TYPE_BUTTON_A
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_MG_COUNT
++	ASL
++	ASL
++	ASL
++	ASL
++	ASL                     ; 32 r
++	CLC
++	ADC z:BH_PAT_WAIT
++	SEC
++	SBC #40
++	STA z:BH_T0
++	LDA z:BH_LOOP_CNT
++	CLC
++	ADC #10
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@label:
++	LDA z:BH_FIGHT_STATE
 +	BEQ @done
 +	LDA z:BH_PAT_WAIT
 +	SEC
 +	SBC #22
 +	STA z:BH_T0
-+	LDA #36
-+	SEC
-+	SBC z:BH_MG_FB_TIMER
-+	LSR
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #4
 +	STA z:BH_T1
-+	LDA z:BH_LOOP_CNT
-+	SEC
-+	SBC #28
-+	SEC
-+	SBC z:BH_T1
-+	STA z:BH_T1
-+	LDA z:BH_MG_FB_KIND
-+	JSR BH_DRAW_LABEL
++	JMP BH_MG_FLOAT_LABEL
 +@done:
 +	RTS
++
++; ===========================================================================
++; BH_COMBO_PHASE - press the five shown buttons in order before the bar empties
++; ===========================================================================
++BH_COMBO_PHASE:
++	LDA #160
++	STA z:BH_T0
++	LDA #56
++	STA z:BH_T1
++	LDA #6
++	JSR BH_MG_START_NOOPEN
++	LDA #20
++	STA z:BH_DMG_PCT        ; a whiff until a press
++	LDA #2
++	STA z:BH_FIGHT_RESULT
++	STA z:BH_FORCE
++	STZ z:BH_FIGHT_TIME     ; next step
++	LDX #0
++@step:
++	JSL RAND
++	AND #$0003
++	STA BH_BULLETS + BHC_SEQ,X
++	STZ BH_BULLETS + BHC_ST,X
++	INX
++	INX
++	CPX #10
++	BCC @step
++	JSR BH_BOX_OPEN
++@loop:
++	JSR BH_MG_FRAME
++	BNE @alive
++	JMP @end
++@alive:
++	LDA z:BH_FIGHT_STATE
++	BNE @loop
++	LDA z:BH_FRAME
++	CMP #BH_COMBO_FRAMES
++	BCS @timeout
++	LDA PAD_PRESS
++	AND #PAD::A_BUTTON | PAD::B_BUTTON | PAD::X_BUTTON | PAD::Y_BUTTON
++	BEQ @loop
++	STA z:BH_T7
++	INC z:BH_MG_COUNT       ; presses
++	LDA z:BH_FIGHT_TIME
++	ASL
++	TAX
++	LDA BH_BULLETS + BHC_SEQ,X
++	ASL
++	TAY
++	PHX
++	TYX
++	LDA f:BH_LANE_BUTTON,X
++	PLX
++	CMP z:BH_T7             ; exactly that button
++	BNE @wrong
++	LDA #1
++	STA BH_BULLETS + BHC_ST,X
++	INC z:BH_MG_SCORE
++	LDA #SFX::CURSOR2
++	BRA @advance
++@wrong:
++	LDA #2
++	STA BH_BULLETS + BHC_ST,X
++	LDA #SFX::CURSOR_INVALID
++@advance:
++	JSR BH_MG_SOUND
++	INC z:BH_FIGHT_TIME
++	LDA z:BH_FIGHT_TIME
++	CMP #5
++	BCC @loop
++	BRA @grade_it
++@timeout:
++	; the steps left are out of time
++	LDA z:BH_FIGHT_TIME
++	ASL
++	TAX
++@late:
++	CPX #10
++	BCS @grade_it
++	LDA #3
++	STA BH_BULLETS + BHC_ST,X
++	INX
++	INX
++	BRA @late
++@grade_it:
++	LDA z:BH_MG_COUNT
++	BNE :+
++	LDA #3                  ; never pressed: the whiff stands, say so
++	JSR BH_GRADE_FEEDBACK
++	BRA @finish
++:
++	LDA z:BH_MG_SCORE
++	CMP #5
++	BEQ @g0
++	CMP #4
++	BEQ @g1
++	CMP #2
++	BCS @g2
++	LDA #3
++	BRA @grade
++@g0:
++	LDA #0
++	BRA @grade
++@g1:
++	LDA #1
++	BRA @grade
++@g2:
++	LDA #2
++@grade:
++	PHA
++	JSR BH_GRADE_ATTACK
++	PLA
++	JSR BH_GRADE_FEEDBACK
++@finish:
++	LDA #1
++	STA z:BH_FIGHT_STATE
++	LDA #36
++	STA z:BH_FIGHT_TIMER
++	JMP @loop
++@end:
++	JMP BH_MG_FINISH
++
++; ---------------------------------------------------------------------------
++BH_RENDER_COMBO:
++	JSR BH_MG_CENTRE
++	; the five steps: pending = its button (the next one bounces), right = spark, wrong/late = red block
++	LDX #0
++@icon:
++	STX z:BH_T6
++	LDA BH_BULLETS + BHC_ST,X
++	BEQ @pending
++	CMP #1
++	BEQ @spark
++	LDA #BH_TYPE_GAUGE_RED
++	BRA @have_type
++@spark:
++	LDA #BH_TYPE_SPARK
++	BRA @have_type
++@pending:
++	LDA BH_BULLETS + BHC_SEQ,X
++	ASL
++	TAX
++	LDA f:BH_LANE_TYPE,X
++@have_type:
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T6             ; 2i
++	ASL
++	ASL
++	ASL                     ; 16i
++	STA z:BH_T0
++	LDA z:BH_T6
++	ASL                     ; 4i
++	CLC
++	ADC z:BH_T0             ; 20i
++	CLC
++	ADC z:BH_PAT_WAIT
++	SEC
++	SBC #48
++	STA z:BH_T0
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #8
++	STA z:BH_T1
++	; the next step bounces while the game runs
++	LDA z:BH_FIGHT_STATE
++	BNE @put
++	LDA z:BH_T6
++	LSR
++	CMP z:BH_FIGHT_TIME
++	BNE @put
++	LDA z:BH_FRAME
++	LSR
++	LSR
++	AND #$0003
++	STA z:BH_T5
++	LDA z:BH_T1
++	SEC
++	SBC z:BH_T5
++	STA z:BH_T1
++@put:
++	JSR BH_OAM_PUT
++	LDX z:BH_T6
++	INX
++	INX
++	CPX #10
++	BCC @icon
++	; the timer bar: one block per 20 frames left, red when short
++	LDA z:BH_FIGHT_STATE
++	BNE @label
++	LDA #BH_COMBO_FRAMES
++	SEC
++	SBC z:BH_FRAME
++	BCC @label
++	LDY #20
++	JSL DIVISION16S_DIVISOR_POSITIVE
++	STA z:BH_T7             ; blocks left (0-9)
++	BEQ @label
++	LDX #0
++@bar:
++	STX z:BH_T6
++	TXA
++	LSR
++	CMP z:BH_T7
++	BCS @label
++	LDA #BH_TYPE_GAUGE_GRN
++	LDX z:BH_T7
++	CPX #6
++	BCS :+
++	LDA #BH_TYPE_GAUGE_YEL
++	CPX #3
++	BCS :+
++	LDA #BH_TYPE_GAUGE_RED
++:	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_T6
++	ASL
++	ASL
++	ASL                     ; 16i
++	CLC
++	ADC z:BH_PAT_WAIT
++	SEC
++	SBC #72
++	STA z:BH_T0
++	LDA z:BH_BOX_Y1
++	SEC
++	SBC #20
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	LDX z:BH_T6
++	INX
++	INX
++	CPX #18
++	BCC @bar
++@label:
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #22
++	STA z:BH_T0
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #30
++	STA z:BH_T1
++	JMP BH_MG_FLOAT_LABEL
 diff --git a/src/battle/calc_damage.asm b/src/battle/calc_damage.asm
 index ef0b95da..98172ec4 100644
 --- a/src/battle/calc_damage.asm

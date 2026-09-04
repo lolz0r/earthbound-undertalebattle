@@ -15,6 +15,7 @@ Piece 4 ("bone"):  16x32 bone bullet pieces (two 16x16: bone top, bone shaft).
 Piece 5 ("minigame"): focus bracket corner, crosshair, "S" label, spark.
 Piece 6 ("buttons"):  A/B/X/Y button icons (rhythm game lanes and notes).
 Piece 7 ("labels"):   PER FEC T GOO; the other label fragments live in pieces 2 and 5.
+Piece 8 ("slots"):    cherry, bell, seven, star for the slot machine.
 """
 import os, sys
 
@@ -314,6 +315,81 @@ def button_icon(letter, fill, ink):
     glyph(s, letter, 6, 5, ink)
     return s
 
+
+# ---- slot machine symbols (piece 8) ----
+CHERRY = from_art([
+    "..........bb....",
+    ".........bb.....",
+    "........bb......",
+    ".......bb.......",
+    "......bb........",
+    ".....b..........",
+    "....b...........",
+    "..rrr...rrr.....",
+    ".rrrrr.rrrrr....",
+    ".rRrrr.rRrrr....",
+    ".rrrrr.rrrrr....",
+    ".rrrrr.rrrrr....",
+    "..rrr...rrr.....",
+    "................",
+    "................",
+    "................",
+], {"r": RED, "R": LIGHTRED, "b": BROWN})
+BELL = from_art([
+    "......yy........",
+    ".....yyyy.......",
+    "....yyyyyy......",
+    "....yyyyyy......",
+    "...yyyyyyyy.....",
+    "...yyyyyyyy.....",
+    "...yyyyyyyy.....",
+    "..yyyyyyyyyy....",
+    "..yyyyyyyyyy....",
+    ".yyyyyyyyyyyy...",
+    ".yyyyyyyyyyyy...",
+    "wwwwwwwwwwwwww..",
+    ".....wwww.......",
+    "......ww........",
+    "................",
+    "................",
+], {"y": YELLOW, "w": WHITE})
+SEVEN = from_art([
+    "................",
+    ".wwwwwwwwwww....",
+    ".wwwwwwwwwww....",
+    ".wwwwwwwwwww....",
+    "........www.....",
+    ".......www......",
+    ".......www......",
+    "......www.......",
+    "......www.......",
+    ".....www........",
+    ".....www........",
+    "....www.........",
+    "....www.........",
+    "................",
+    "................",
+    "................",
+], {"w": WHITE})
+STAR = from_art([
+    ".......y........",
+    ".......y........",
+    "......yyy.......",
+    "......yyy.......",
+    ".....yyyyy......",
+    ".yyyyyyyyyyyyy..",
+    "..yyyyyyyyyyy...",
+    "...yyyyyyyyy....",
+    "....yyyyyyy.....",
+    "....yyyyyyy.....",
+    "...yyyy.yyyy....",
+    "...yyy...yyy....",
+    "..yy.......yy...",
+    "................",
+    "................",
+    "................",
+], {"y": YELLOW})
+
 def piece_sheet(sprites):
     """4 sprites of 16x16 into a 32x32 piece: (0,0),(16,0),(0,16),(16,16)."""
     p = blank()
@@ -349,6 +425,7 @@ PIECES = [
     piece_sheet([button_icon("A", RED, WHITE), button_icon("B", YELLOW, BLACK),
                  button_icon("X", BLUE, WHITE), button_icon("Y", GREEN, BLACK)]),   # piece 6: rhythm lane buttons
     piece_sheet([label("PER", LIGHTGREEN), label("FEC", LIGHTGREEN), label("T", LIGHTGREEN), label("GOO", YELLOW)]),  # piece 7: labels
+    piece_sheet([CHERRY, BELL, SEVEN, STAR]),           # piece 8: slot machine symbols
 ]
 
 def encode_piece(p):
