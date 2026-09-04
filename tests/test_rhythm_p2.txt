@@ -16,41 +16,32 @@ run 20
 press a 4
 waitmem BH_DP 1 600
 peek BH_DP+0x52 2
-peek BH_DP+0xB4 2
+peek BH_DP+0xA0 2
 peek BH_DP+0x54 2
 peek BH_DP+0x6E 2
-run 12
-shot rh_000
-run 30
-shot rh_030
-waitle BH_DP+0xA0 1056 600
+peek BH_BULLETS+16 10
+waitle BH_BULLETS+0 800 600
 press a 2
-run 6
-shot rh_hit1
-waitle BH_DP+0xA2 1056 600
-press a 2
-run 6
-shot rh_hit2
-run 20
-shot rh_mid
-waitle BH_DP+0xA4 1056 600
-press a 2
-waitle BH_DP+0xA6 1056 600
-press a 2
-run 6
-shot rh_hit4
-waitle BH_DP+0xA8 1056 600
-press a 2
-run 10
-shot rh_hit5
-peek BH_DP+0xAA 10
-peek BH_DP+0xB6 2
+run 5
+shot rq_hit0
+waitle BH_BULLETS+2 800 600
+press x 2
+run 5
+shot rq_hit1
+waitle BH_BULLETS+4 800 600
+press b 2
+run 5
+shot rq_hit2
+waitle BH_BULLETS+6 800 600
+press b 2
+run 5
+shot rq_hit3
+peek BH_BULLETS+16 10
+peek BH_DP+0xA2 2
 waitmem BH_DP 0 900
 peek BH_DP+0x3E 2
 peek BH_DP+0x92 2
 peek BH_DP+0x96 2
-run 40
-shot rh_after
-run 120
-shot rh_dmg
+run 150
+shot rq_dmg
 peek BATTLERS_TABLE+641 2

@@ -12,7 +12,9 @@ Piece 2 ("vline"): sheet of 16x16 sprites; sprite 0 has a 2px white line along i
                    (16x16 side-border pieces keep the per-scanline sprite budget low).
 Piece 3 ("gauge"): four 16x16 sprites used by the FIGHT timing bar: red, yellow, green blocks, cursor.
 Piece 4 ("bone"):  16x32 bone bullet pieces (two 16x16: bone top, bone shaft).
-Piece 5 ("minigame"): focus bracket corner, crosshair, rhythm note, spark.
+Piece 5 ("minigame"): focus bracket corner, crosshair, "S" label, spark.
+Piece 6 ("buttons"):  A/B/X/Y button icons (rhythm game lanes and notes).
+Piece 7 ("labels"):   PER FEC T GOO; the other label fragments live in pieces 2 and 5.
 """
 import os, sys
 
@@ -267,6 +269,51 @@ SPARK = from_art([
     "................",
 ], {"y": YELLOW})
 
+
+# ---- 4x6 micro font for the minigame labels and button icons ----
+FONT = {
+    "A": [".##.", "#..#", "####", "#..#", "#..#", "#..#"],
+    "B": ["###.", "#..#", "###.", "#..#", "#..#", "###."],
+    "C": [".###", "#...", "#...", "#...", "#...", ".###"],
+    "D": ["###.", "#..#", "#..#", "#..#", "#..#", "###."],
+    "E": ["####", "#...", "###.", "#...", "#...", "####"],
+    "F": ["####", "#...", "###.", "#...", "#...", "#..."],
+    "G": [".###", "#...", "#.##", "#..#", "#..#", ".###"],
+    "I": ["####", ".#..", ".#..", ".#..", ".#..", "####"],
+    "K": ["#..#", "#.#.", "##..", "#.#.", "#..#", "#..#"],
+    "M": ["#..#", "####", "####", "#..#", "#..#", "#..#"],
+    "O": [".##.", "#..#", "#..#", "#..#", "#..#", ".##."],
+    "P": ["###.", "#..#", "###.", "#...", "#...", "#..."],
+    "R": ["###.", "#..#", "###.", "#.#.", "#..#", "#..#"],
+    "S": [".###", "#...", ".##.", "...#", "...#", "###."],
+    "T": ["####", ".#..", ".#..", ".#..", ".#..", ".#.."],
+    "X": ["#..#", "#..#", ".##.", ".##.", "#..#", "#..#"],
+    "Y": ["#..#", "#..#", ".##.", ".#..", ".#..", ".#.."],
+}
+
+def glyph(dst, ch, ox, oy, colour):
+    for y, row in enumerate(FONT[ch]):
+        for x, c in enumerate(row):
+            if c == "#":
+                dst[oy + y][ox + x] = colour
+
+def label(text, colour):
+    """up to three letters, 5 px pitch, in one 16x16 sprite (left aligned so sprites chain)"""
+    s = blank(16, 16)
+    for i, ch in enumerate(text[:3]):
+        glyph(s, ch, i * 5, 5, colour)
+    return s
+
+def button_icon(letter, fill, ink):
+    """a 16 px round button with its letter: the rhythm game's lane targets and notes"""
+    s = blank(16, 16)
+    for y in range(16):
+        for x in range(16):
+            if (x - 7.5) ** 2 + (y - 7.5) ** 2 <= 7.5 ** 2:
+                s[y][x] = fill
+    glyph(s, letter, 6, 5, ink)
+    return s
+
 def piece_sheet(sprites):
     """4 sprites of 16x16 into a 32x32 piece: (0,0),(16,0),(0,16),(16,16)."""
     p = blank()
@@ -289,7 +336,8 @@ def vline16():
     return s
 
 def piece_vline():
-    return piece_sheet([vline16(), blank(16, 16), blank(16, 16), blank(16, 16)])
+    # the three free sprites carry label fragments: "D" (of GOOD), "OK", "MIS" (of MISS)
+    return piece_sheet([vline16(), label("D", YELLOW), label("OK", WHITE), label("MIS", RED)])
 
 PIECES = [
     piece_sheet([HEART, ROUND, FLAME, DOT]),
@@ -297,7 +345,10 @@ PIECES = [
     piece_vline(),
     piece_sheet([block(RED), block(YELLOW), block(GREEN), CURSOR]),
     piece_sheet([BONE_TOP, BONE_SHAFT, block(BLUE, 4), block(ORANGE, 4)]),
-    piece_sheet([BRACKET, CROSSHAIR, NOTE, SPARK]),      # piece 5: focus brackets, crosshair, rhythm note, spark
+    piece_sheet([BRACKET, CROSSHAIR, label("S", RED), SPARK]),   # piece 5: focus brackets, crosshair, "S" (of MISS), spark
+    piece_sheet([button_icon("A", RED, WHITE), button_icon("B", YELLOW, BLACK),
+                 button_icon("X", BLUE, WHITE), button_icon("Y", GREEN, BLACK)]),   # piece 6: rhythm lane buttons
+    piece_sheet([label("PER", LIGHTGREEN), label("FEC", LIGHTGREEN), label("T", LIGHTGREEN), label("GOO", YELLOW)]),  # piece 7: labels
 ]
 
 def encode_piece(p):

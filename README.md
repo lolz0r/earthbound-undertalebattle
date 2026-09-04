@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `afdf88fa5a720443ddc922d16547bde753cf9e1d` |
+| output: patched ROM | 4,194,304 bytes | `8ba08bab06c5a631e2aaa0a5b7c02f420c399483` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -90,30 +90,39 @@ enemy sprites, experience) is untouched.
 ## Three attack minigames, two ways to take a hit
 
 Each physical attack by a party member picks one of three minigames at random
-(the gauge twice as often as the others); each enemy attack is a dodge box three
-times in four and a timed block otherwise. Auto Fight skips all of them.
+(one in three each); each enemy attack is a dodge box three times in four and a
+timed block otherwise. Auto Fight skips all of them. Every press in the new games
+floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade is
+never in doubt.
 
 - **Timing gauge** (as before): press A while the bouncing reticle is in the green
   for a SMAAAASH; yellow always connects, red misses 70 % of the time.
-- **Rhythm** (3-5 seconds): notes scroll from the right towards the hit line on the
-  left. Press A as each note crosses the line. Every press pops a green (perfect),
-  yellow (good/ok) or red (missed note) block off the line with its own sound, and
-  the strip along the bottom keeps the result of each note. Damage is 40-100 % by
-  accuracy (perfect 10, good 7, ok 4 points per note); 90 % or better is a SMAAAASH,
-  hitting nothing is a whiff.
+- **Rhythm** (3-5 seconds, Guitar Hero style): four lanes, each with one of the
+  A, B, X and Y buttons as its target on the left. Notes drawn as the same button
+  icons scroll in from the right; press that button as the note reaches its
+  target. Within 4 px is PERFECT (10 points), 10 px GOOD (7), 18 px OK (4);
+  the wrong button, or letting a note pass, is a MISS. The strip along the bottom
+  keeps one green/yellow/red block per note. Damage is 40-100 % by points, 90 %
+  or better is a SMAAAASH, hitting nothing is a whiff.
 - **Focus**: four brackets close in on a crosshair; press A when they frame it.
-  Perfect (within 2 px) is a SMAAAASH at 100 %, good 85 %, ok 70 %, a miss 40 % and
-  the usual hit roll. The target turns into a spark on a perfect press, and the
-  pop and sound tell you the grade at once.
-- **Timed block** (enemy attacks): the same brackets close on your heart. A perfect
-  press dodges the attack outright ("dodged quickly"), good takes 50 %, ok 75 %, a
-  miss the full hit. The brackets pause for 12 frames before they start moving and
+  PERFECT (within 2 px) is a SMAAAASH at 100 %, GOOD 85 %, OK 70 %, a MISS 40 %
+  and the usual hit roll. The crosshair turns into a spark on a perfect press.
+- **Timed block** (enemy attacks): the same brackets close on your heart. PERFECT
+  dodges the attack outright ("dodged quickly"), GOOD takes 50 %, OK 75 %, a MISS
+  the full hit. The brackets pause for 12 frames before they start moving and
   take 33-60 frames to reach the heart, so there is always time to read the speed.
 
+Sprite budget: the engine's eight 32x32 tile pieces go into the sprite VRAM slots
+left after the enemy sprites; a piece that finds no slot is marked unavailable and
+the games that need it are not picked (with no room for the box pieces at all the
+action resolves classically).
+
 `poke BH_DP+0x9C n` in a harness script forces a kind (1 gauge, 2 rhythm, 3 focus
-for attacks; 4 block, 5 dodge box for enemy attacks); `tests/test_rhythm.txt`,
-`tests/test_focus_attack.txt` and `tests/test_focus_block*.txt` play each one with
-frame-exact presses (`waitle` waits until a note or the brackets reach the line).
+for attacks; 4 block, 5 dodge box for enemy attacks). `tests/test_rhythm_p2.txt`
+is generated from a first pass that reads the random lanes and then presses the
+right button on every note (`waitle` waits until a note reaches its target);
+`tests/test_focus_attack.txt` and `tests/test_focus_block*.txt` do the same for
+the brackets.
 
 ## Classic mode, rolling HP and fairness
 
@@ -134,8 +143,9 @@ frame-exact presses (`waitle` waits until a note or the brackets reach the line)
 
 ### 2026-09-04
 
-- Two new minigames, picked at random: a rhythm game for attacks and a focus/timed-block
-  game for attacks and enemy attacks (above), each with instant colour and sound feedback.
+- Two new minigames, picked at random: a four-lane A/B/X/Y rhythm game for attacks and a
+  focus/timed-block game for attacks and enemy attacks (above), with PERFECT / GOOD / OK /
+  MISS labels and sounds on every press.
 - Fixed the corrupted dodge box in the Giygas prayer phase: the phase transitions
   reload the enemy sprite VRAM over the engine's tiles, which are now re-uploaded on
   every reload (`UNKNOWN_C2C21F`).

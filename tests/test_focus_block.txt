@@ -11,14 +11,14 @@ waitmem BATTLE_MODE_FLAG 1 900
 poke BH_DP+0x9C 04
 spam a 40 2400 BH_DP 1
 peek BH_DP+0x52 2
-peek BH_DP+0xB4 2
+peek BH_DP+0xA0 2
 run 12
 shot fb_000
-waitle BH_DP+0xBE 144 600
+waitle BH_DP+0xAA 144 600
 press a 2
 run 4
 shot fb_press
-peek BH_DP+0xB6 2
+peek BH_DP+0xA4 2
 peek BH_DP+0x0A 2
 peek BH_DP+0x3E 2
 waitmem BH_DP 0 900
