@@ -8,37 +8,32 @@ poke PARTY_CHARACTERS+69 E7 03 E7 03
 poke BATTLE_INITIATIVE 01 00
 poke BATTLE_MODE FF FF
 waitmem BATTLE_MODE_FLAG 1 900
-poke BH_DP+0x9C 08
+poke BH_DP+0x9C 06
 wait2 CURRENT_FOCUS_WINDOW 0x0F BATTLE_MENU_CURRENT_CHARACTER_ID 0 900
 run 40
 press a 4
 run 20
 press a 4
-waitmem BH_DP 1 600
-peek BH_DP+0x52 2
-run 10
-press b 2
-run 12
-shot cb_step0
-press a 2
-run 12
-shot cb_step1
-press x 2
-run 12
-shot cb_step2
-press b 2
-run 12
-shot cb_step3
-press y 2
-run 12
-shot cb_step4
-peek BH_BULLETS+64 10
-peek BH_DP+0x34 2
+waitmem BH_DP 1 900
 run 20
-shot cb_result
+shot hint_mash
 waitmem BH_DP 0 900
-peek BH_DP+0x3E 2
-peek BH_DP+0x92 2
-peek BH_DP+0x96 2
-run 120
-peek BATTLERS_TABLE+641 2
+poke BH_DP+0x9C 05
+waitmem BH_DP 1 900
+run 20
+shot hint_dodge
+waitmem BH_DP 0 900
+poke BH_DP+0x9C 02
+wait2 CURRENT_FOCUS_WINDOW 0x0F BATTLE_MENU_CURRENT_CHARACTER_ID 0 1500
+run 40
+press a 4
+run 20
+press a 4
+waitmem BH_DP 1 900
+run 20
+shot hint_rhythm
+waitmem BH_DP 0 900
+poke BH_DP+0x9C 04
+waitmem BH_DP 1 900
+run 20
+shot hint_block

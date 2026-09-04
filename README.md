@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `f7db921507033519ac9e9cbaca4ea1d22e8459b4` |
+| output: patched ROM | 4,194,304 bytes | `4ea1458e04aca0a5db0ae2aeae408a625bb055de` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -91,9 +91,11 @@ enemy sprites, experience) is untouched.
 
 Each physical attack by a party member picks one of six minigames at random
 (one in six each); each enemy attack is a dodge box three times in four and a
-timed block otherwise. Auto Fight skips all of them. Every graded press floats a
-**PERFECT / GOOD / OK / MISS** label with its own sound, so the grade is never in
-doubt, and a game you never press a button in says MISS and whiffs.
+timed block otherwise. Auto Fight skips all of them. Each game first prints a
+one-line instruction in the battle text window ("Mash the A button!", "Press each
+button as its note reaches it!", "Dodge the bullets!" ...), every graded press
+floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade is
+never in doubt, and a game you never press a button in says MISS and whiffs.
 
 - **Timing gauge** (as before): press A while the bouncing reticle is in the green
   for a SMAAAASH; yellow always connects, red misses 70 % of the time.
@@ -156,7 +158,7 @@ then press the right buttons at the right frames (`waitle`/`waitmem`);
 - Five new minigames, picked at random: a rhythm game with the SNES buttons in the middle
   of the box, a focus/timed-block game for attacks and enemy attacks, a mash bar, a slot
   machine and a button combo (above), with PERFECT / GOOD / OK / MISS labels and sounds on
-  every press.
+  every press and a one-line instruction before each game.
 - Fixed the corrupted dodge box in the Giygas prayer phase: the phase transitions
   reload the enemy sprite VRAM over the engine's tiles, which are now re-uploaded on
   every reload (`UNKNOWN_C2C21F`).

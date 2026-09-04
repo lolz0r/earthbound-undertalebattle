@@ -8218,10 +8218,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..c437aabc
+index 00000000..2a01e7d1
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,2868 @@
+@@ -0,0 +1,2872 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -8647,6 +8647,8 @@ index 00000000..c437aabc
 +; BH_RUN_PHASE - set up and run one dodge phase; result in BH_HITS
 +; ===========================================================================
 +BH_RUN_PHASE:
++	LDX #.LOWORD(BH_HINT_DODGE)
++	JSR BH_SHOW_HINT
 +	JSR BH_ROLL_FREEZE
 +	JSR BH_SETUP
 +	JSR BH_BOX_OPEN
@@ -8919,6 +8921,8 @@ index 00000000..c437aabc
 +;   Result in BH_DMG_PCT (30..130, or 20 when the player never pressed).
 +; ===========================================================================
 +BH_FIGHT_PHASE:
++	LDX #.LOWORD(BH_HINT_GAUGE)
++	JSR BH_SHOW_HINT
 +	JSR BH_ROLL_FREEZE
 +	LDA #BH_FIGHT_BOX_W
 +	STA z:BH_T0
@@ -11092,10 +11096,10 @@ index 00000000..c437aabc
 +	RTS
 diff --git a/src/battle/bullet_hell/bh_minigames.asm b/src/battle/bullet_hell/bh_minigames.asm
 new file mode 100644
-index 00000000..b901f1ff
+index 00000000..97990e81
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_minigames.asm
-@@ -0,0 +1,1525 @@
+@@ -0,0 +1,1574 @@
 +; ---------------------------------------------------------------------------
 +; Extra minigames, picked at random per action. Every graded press floats a
 +; PERFECT / GOOD / OK / MISS label (BH_DRAW_LABEL) with its own sound.
@@ -11118,6 +11122,42 @@ index 00000000..b901f1ff
 +;                     bar runs out.
 +; All run inside the engine's direct page, like BH_FIGHT_PHASE.
 +; ---------------------------------------------------------------------------
++
++
++; ---------------------------------------------------------------------------
++; One-line instructions, printed in the battle text window before a minigame
++; opens (EarthBound text: ASCII + $30, "@" is the bullet, $00 a line break,
++; $13 halt without prompt, $02 end of block).
++; ---------------------------------------------------------------------------
++BH_HINT_GAUGE:	; @Press A in the green!
++	.BYTE $01, $70, $80, $A2, $95, $A3, $A3, $50, $71, $50, $99, $9E, $50, $A4, $98, $95, $50, $97, $A2, $95, $95, $9E, $51, $13, $02
++BH_HINT_RHYTHM:	; @Press each button as /   its note reaches it!
++	.BYTE $01, $70, $80, $A2, $95, $A3, $A3, $50, $95, $91, $93, $98, $50, $92, $A5, $A4, $A4, $9F, $9E, $50, $91, $A3, $00, $50, $50, $99, $A4, $A3, $50, $9E, $9F, $A4, $95, $50, $A2, $95, $91, $93, $98, $95, $A3, $50, $99, $A4, $51, $13, $02
++BH_HINT_FOCUS:	; @Press A when the brackets /   frame the target!
++	.BYTE $01, $70, $80, $A2, $95, $A3, $A3, $50, $71, $50, $A7, $98, $95, $9E, $50, $A4, $98, $95, $50, $92, $A2, $91, $93, $9B, $95, $A4, $A3, $00, $50, $50, $96, $A2, $91, $9D, $95, $50, $A4, $98, $95, $50, $A4, $91, $A2, $97, $95, $A4, $51, $13, $02
++BH_HINT_MASH:	; @Mash the A button!
++	.BYTE $01, $70, $7D, $91, $A3, $98, $50, $A4, $98, $95, $50, $71, $50, $92, $A5, $A4, $A4, $9F, $9E, $51, $13, $02
++BH_HINT_SLOTS:	; @Press A to stop the reels!
++	.BYTE $01, $70, $80, $A2, $95, $A3, $A3, $50, $71, $50, $A4, $9F, $50, $A3, $A4, $9F, $A0, $50, $A4, $98, $95, $50, $A2, $95, $95, $9C, $A3, $51, $13, $02
++BH_HINT_COMBO:	; @Hit the buttons in order!
++	.BYTE $01, $70, $78, $99, $A4, $50, $A4, $98, $95, $50, $92, $A5, $A4, $A4, $9F, $9E, $A3, $50, $99, $9E, $50, $9F, $A2, $94, $95, $A2, $51, $13, $02
++BH_HINT_BLOCKG:	; @Press A when the brackets /   frame your heart!
++	.BYTE $01, $70, $80, $A2, $95, $A3, $A3, $50, $71, $50, $A7, $98, $95, $9E, $50, $A4, $98, $95, $50, $92, $A2, $91, $93, $9B, $95, $A4, $A3, $00, $50, $50, $96, $A2, $91, $9D, $95, $50, $A9, $9F, $A5, $A2, $50, $98, $95, $91, $A2, $A4, $51, $13, $02
++BH_HINT_DODGE:	; @Dodge the bullets!
++	.BYTE $01, $70, $74, $9F, $94, $97, $95, $50, $A4, $98, $95, $50, $92, $A5, $9C, $9C, $95, $A4, $A3, $51, $13, $02
++
++; X = low word of a hint block (all in this bank) -> print it, wait for the text
++BH_SHOW_HINT:
++	PHD
++	LDA z:BH_CALLER_D
++	TCD
++	STX $0E
++	LDA #^BH_HINT_GAUGE
++	STA $10
++	JSL DISPLAY_IN_BATTLE_TEXT
++	REP #PROC_FLAGS::ACCUM8 | PROC_FLAGS::INDEX8
++	PLD
++	RTS
 +
 +; party physical attack: one of six games (BH_FORCE_MG: 1 gauge 2 rhythm 3 focus 6 mash 7 slots 8 combo)
 +BH_PICK_ATTACK_GAME:
@@ -11396,6 +11436,8 @@ index 00000000..b901f1ff
 +; BH_RHYTHM_PHASE
 +; ===========================================================================
 +BH_RHYTHM_PHASE:
++	LDX #.LOWORD(BH_HINT_RHYTHM)
++	JSR BH_SHOW_HINT
 +	LDA #BH_RHYTHM_BOX_W
 +	STA z:BH_T0
 +	LDA #BH_RHYTHM_BOX_H
@@ -11766,6 +11808,11 @@ index 00000000..b901f1ff
 +; ===========================================================================
 +BH_FOCUS_PHASE:
 +	PHA
++	LDX #.LOWORD(BH_HINT_FOCUS)
++	CMP #0
++	BEQ :+
++	LDX #.LOWORD(BH_HINT_BLOCKG)
++:	JSR BH_SHOW_HINT
 +	LDA #BH_FOCUS_BOX_W
 +	STA z:BH_T0
 +	LDA #BH_FOCUS_BOX_H
@@ -11984,6 +12031,8 @@ index 00000000..b901f1ff
 +; BH_MASH_PHASE - mash A: +14 per press, -1 per frame, nine blocks of 16
 +; ===========================================================================
 +BH_MASH_PHASE:
++	LDX #.LOWORD(BH_HINT_MASH)
++	JSR BH_SHOW_HINT
 +	LDA #BH_FIGHT_BOX_W
 +	STA z:BH_T0
 +	LDA #64
@@ -12159,6 +12208,8 @@ index 00000000..b901f1ff
 +; BH_SLOTS_PHASE - three reels, A stops the next spinning one
 +; ===========================================================================
 +BH_SLOTS_PHASE:
++	LDX #.LOWORD(BH_HINT_SLOTS)
++	JSR BH_SHOW_HINT
 +	LDA #128
 +	STA z:BH_T0
 +	LDA #64
@@ -12384,6 +12435,8 @@ index 00000000..b901f1ff
 +; BH_COMBO_PHASE - press the five shown buttons in order before the bar empties
 +; ===========================================================================
 +BH_COMBO_PHASE:
++	LDX #.LOWORD(BH_HINT_COMBO)
++	JSR BH_SHOW_HINT
 +	LDA #160
 +	STA z:BH_T0
 +	LDA #56
