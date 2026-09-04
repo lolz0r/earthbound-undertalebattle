@@ -9,7 +9,27 @@ H = f'{T}/tools/bin/ebharness'; CORE = f'{T}/tools/snes9x/libretro/snes9x_libret
 ROM = f'{T}/ebsrc/build/earthbound.sfc'; MAP = f'{T}/ebsrc/build/earthbound.map'
 OUT = f'{T}/tests/out/playtest'; os.makedirs(OUT, exist_ok=True)
 import shutil; shutil.copy(f'{T}/tests/out/after_intro.st', OUT)
-groups = json.load(open(f'{T}/tests/out/enemy_groups.json'))
+def enemy_groups():
+    """first battle group that lists each enemy (its sprites are loaded from the group)"""
+    enum, val, inenum = {}, 0, False
+    for l in open(f'{T}/ebsrc/include/constants/enemies.asm'):
+        t = l.strip()
+        if t.startswith('.ENUM'): inenum, val = True, 0; continue
+        if t.startswith('.ENDENUM'): inenum = False; continue
+        if not inenum or not t or t.startswith(';'): continue
+        m = re.match(r'([A-Za-z_0-9]+)\s*(=\s*(\S+))?', t)
+        if not m: continue
+        if m.group(3): val = int(m.group(3), 0)
+        enum[m.group(1)] = val; val += 1
+    first, cur = {}, None
+    for l in open(f'{T}/ebsrc/src/data/map/battle_groups_table.asm'):
+        t = l.strip()
+        m = re.match(r'ENEMY_GROUP_(\d+):', t)
+        if m: cur = int(m.group(1)); continue
+        m = re.match(r'\.WORD ENEMY::(\w+)', t)
+        if m and cur is not None and enum.get(m.group(1)) is not None: first.setdefault(str(enum[m.group(1)]), cur)
+    return first
+groups = enemy_groups()
 inc = open(f'{T}/ebsrc/include/bullet_hell.asm').read()
 def off(name): return int(re.search(rf'^{name}\s*=\s*\$([0-9A-F]+)', inc, re.M).group(1), 16)
 SPEED, TEMPO, TIMER = off('BH_SPEED'), off('BH_TEMPO'), off('BH_TIMER')
