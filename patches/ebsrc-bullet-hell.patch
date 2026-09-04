@@ -11107,7 +11107,7 @@ index 00000000..97baedff
 +	RTS
 diff --git a/src/battle/bullet_hell/bh_hint_table.asm b/src/battle/bullet_hell/bh_hint_table.asm
 new file mode 100644
-index 00000000..c1f08203
+index 00000000..cf0a9927
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_hint_table.asm
 @@ -0,0 +1,9 @@
@@ -11116,16 +11116,16 @@ index 00000000..c1f08203
 +	.BYTE 7	; PRESS A IN THE GREEN
 +	.BYTE 9	; TAP THE BUTTON A NOTE HITS
 +	.BYTE 9	; PRESS A WHEN THEY FRAME IT
-+	.BYTE 6	; MASH THE A BUTTON
++	.BYTE 5	; MASH ANY BUTTON
 +	.BYTE 9	; PRESS A TO STOP EACH REEL
 +	.BYTE 8	; HIT THE BUTTONS IN ORDER
 +	.BYTE 6	; DODGE THE BULLETS
 diff --git a/src/battle/bullet_hell/bh_minigames.asm b/src/battle/bullet_hell/bh_minigames.asm
 new file mode 100644
-index 00000000..51f78fb7
+index 00000000..4b14a0da
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_minigames.asm
-@@ -0,0 +1,1666 @@
+@@ -0,0 +1,1734 @@
 +; ---------------------------------------------------------------------------
 +; Extra minigames, picked at random per action. Every graded press floats a
 +; PERFECT / GOOD / OK / MISS label (BH_DRAW_LABEL) with its own sound.
@@ -12146,7 +12146,10 @@ index 00000000..51f78fb7
 +	JMP BH_MG_FLOAT_LABEL
 +
 +; ===========================================================================
-+; BH_MASH_PHASE - mash A: +14 per press, -1 per frame, nine blocks of 16
++; BH_MASH_PHASE - mash any face button: +14 per press, -1 per frame, nine
++;   blocks of 16. The bar's edge moves with every press, the prompt shows the
++;   button just pressed and jumps, OK / GOOD / PERFECT pop as the bar crosses
++;   40 / 90 / 130, and a full bar sparks.
 +; ===========================================================================
 +BH_MASH_PHASE:
 +	LDA #3
@@ -12162,6 +12165,9 @@ index 00000000..51f78fb7
 +	LDA #2
 +	STA z:BH_FIGHT_RESULT
 +	STA z:BH_FORCE
++	STZ z:BH_FIGHT_TIME     ; highest threshold announced so far
++	STZ z:BH_FIGHT_DIR      ; prompt jump frames
++	STZ z:BH_MG_FB_X        ; button shown by the prompt (lane: A B X Y)
 +@loop:
 +	JSR BH_MG_FRAME
 +	BNE @alive
@@ -12169,47 +12175,81 @@ index 00000000..51f78fb7
 +@alive:
 +	LDA z:BH_FIGHT_STATE
 +	BNE @loop
-+	; drain
++	LDA z:BH_FIGHT_DIR
++	BEQ :+
++	DEC z:BH_FIGHT_DIR
++:	; drain
 +	LDA z:BH_MG_SCORE
 +	BEQ :+
 +	DEC z:BH_MG_SCORE
 +:	LDA PAD_PRESS
-+	AND #PAD::A_BUTTON
++	AND #PAD::A_BUTTON | PAD::B_BUTTON | PAD::X_BUTTON | PAD::Y_BUTTON
 +	BEQ @no_press
++	STA z:BH_T7
 +	INC z:BH_MG_COUNT
++	; which button: the prompt takes its icon
++	LDX #0
++@which:
++	LDA f:BH_LANE_BUTTON,X
++	AND z:BH_T7
++	BNE @found
++	INX
++	INX
++	CPX #8
++	BCC @which
++	LDX #0
++@found:
++	TXA
++	LSR
++	STA z:BH_MG_FB_X
++	LDA #6
++	STA z:BH_FIGHT_DIR      ; the prompt jumps
 +	LDA z:BH_MG_SCORE
 +	CLC
 +	ADC #14
 +	CMP #BH_MASH_FULL
-+	BCC @store
++	BCC :+
 +	LDA #BH_MASH_FULL
-+	PHA
-+	LDA #SFX::CURSOR2       ; the bar is full
++:	STA z:BH_MG_SCORE
++	; a threshold crossed announces itself (OK / GOOD / PERFECT); otherwise a tick
++	CMP #130
++	BCC @try_good
++	LDX #3
++	BRA @announce
++@try_good:
++	CMP #90
++	BCC @try_ok
++	LDX #2
++	BRA @announce
++@try_ok:
++	CMP #40
++	BCC @tick
++	LDX #1
++@announce:
++	CPX z:BH_FIGHT_TIME
++	BEQ @tick
++	BCC @tick
++	STX z:BH_FIGHT_TIME
++	LDA #3
++	STX z:BH_T6
++	SEC
++	SBC z:BH_T6             ; level 1/2/3 -> grade 2/1/0
++	JSR BH_GRADE_FEEDBACK
++	BRA @no_press
++@tick:
++	LDA #SFX::CURSOR3
 +	JSR BH_MG_SOUND
-+	PLA
-+	BRA @stored
-+@store:
-+	PHA
-+	LDA z:BH_MG_COUNT
-+	AND #$0003
-+	BNE :+
-+	LDA #SFX::CURSOR1       ; a tick every fourth press
-+	JSR BH_MG_SOUND
-+:	PLA
-+@stored:
-+	STA z:BH_MG_SCORE
 +@no_press:
 +	LDA z:BH_FRAME
 +	CMP #BH_MASH_FRAMES
-+	BCC @loop
++	BCC @loop_j
 +	; ---- time is up: grade the fill ----
 +	LDA z:BH_MG_COUNT
 +	BNE :+
 +	LDA #3                  ; never pressed: the whiff stands, say so
 +	JSR BH_GRADE_FEEDBACK
 +	BRA @finish
-+:
-+	LDA z:BH_MG_SCORE
++:	LDA z:BH_MG_SCORE
 +	CMP #130
 +	BCS @g0
 +	CMP #90
@@ -12236,6 +12276,7 @@ index 00000000..51f78fb7
 +	STA z:BH_FIGHT_STATE
 +	LDA #36
 +	STA z:BH_FIGHT_TIMER
++@loop_j:
 +	JMP @loop
 +@end:
 +	JMP BH_MG_FINISH
@@ -12286,15 +12327,40 @@ index 00000000..51f78fb7
 +	CPX #18
 +	BCC @block
 +@bar_done:
-+	; the A button bouncing above the bar while the game runs, a spark once the bar is full
++	; the bar's edge: a line at the exact fill, moving with every press
++	LDA z:BH_FIGHT_STATE
++	BNE @prompt
++	LDA z:BH_MG_SCORE
++	BEQ @prompt
++	CMP #BH_MASH_FULL
++	BCS @prompt
++	LDA #BH_TYPE_CURSOR
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_PAT_WAIT
++	SEC
++	SBC #72 + 7
++	CLC
++	ADC z:BH_MG_SCORE
++	STA z:BH_T0
++	LDA z:BH_T7
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++@prompt:
++	; the button just pressed bounces above the bar and jumps on each press; a spark once full
 +	LDA z:BH_FIGHT_STATE
 +	BNE @label
-+	LDA #BH_TYPE_BUTTON_A
 +	LDX z:BH_MG_SCORE
 +	CPX #BH_MASH_FULL
-+	BNE :+
++	BEQ @spark
++	LDA z:BH_MG_FB_X
++	ASL
++	TAX
++	LDA f:BH_LANE_TYPE,X
++	BRA @put_prompt
++@spark:
 +	LDA #BH_TYPE_SPARK
-+:	JSR BH_TILE_FOR_TYPE
++@put_prompt:
++	JSR BH_TILE_FOR_TYPE
 +	LDA z:BH_PAT_WAIT
 +	SEC
 +	SBC #8
@@ -12302,13 +12368,15 @@ index 00000000..51f78fb7
 +	LDA z:BH_FRAME
 +	LSR
 +	LSR
-+	AND #$0003              ; 0..3 bounce
++	AND #$0003              ; 0..3 idle bounce
++	CLC
++	ADC z:BH_FIGHT_DIR      ; plus the jump after a press
 +	STA z:BH_T1
 +	LDA z:BH_LOOP_CNT
 +	SEC
 +	SBC #18
-+	CLC
-+	ADC z:BH_T1
++	SEC
++	SBC z:BH_T1
 +	STA z:BH_T1
 +	JSR BH_OAM_PUT
 +@label:

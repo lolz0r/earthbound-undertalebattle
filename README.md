@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `184e399bf9e450c66da09c53cb08ec56760082bf` |
+| output: patched ROM | 4,194,304 bytes | `999ae62e062583b25271da6a87adba66b97f0b49` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -93,7 +93,7 @@ Each physical attack by a party member picks one of six minigames at random
 (one in six each); each enemy attack is a dodge box three times in four and a
 timed block otherwise. Auto Fight skips all of them. Each box carries a one-line
 instruction along its bottom edge, in the same sprite font as the grade labels
-("MASH THE A BUTTON", "TAP THE BUTTON A NOTE HITS", "DODGE THE BULLETS" ...); the
+("MASH ANY BUTTON", "TAP THE BUTTON A NOTE HITS", "DODGE THE BULLETS" ...); the
 lines are pre-rendered by `tools/gen_bh_gfx.py` (`bh_hints.bin`, bank $F0) and a
 game uploads its own line into three spare sprite slots when it starts. Every graded
 press floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade
@@ -111,9 +111,12 @@ is never in doubt, and a game you never press a button in says MISS and whiffs.
 - **Focus**: four brackets close in on a crosshair; press A when they frame it.
   PERFECT (within 2 px) is a SMAAAASH at 100 %, GOOD 85 %, OK 70 %, a MISS 40 %
   and the usual hit roll. The crosshair turns into a spark on a perfect press.
-- **Mash**: mash A for two and a half seconds. Each press adds to a nine-block
-  power bar (red, yellow, green thirds) that drains all the time; a full bar
-  sparks. 130+ of 144 is PERFECT (SMAAAASH), 90+ GOOD, 40+ OK, less a MISS.
+- **Mash**: mash any face button (A, B, X or Y) for two and a half seconds. Each
+  press adds 14 to a nine-block power bar (red, yellow, green thirds) that drains
+  one per frame; a line marks the exact fill and moves with every press, the prompt
+  shows the button you just hit and jumps, each press ticks, and OK / GOOD / PERFECT
+  pop up as the bar crosses 40 / 90 / 130. A full bar sparks. The fill when time
+  runs out is the grade: 130+ of 144 PERFECT (SMAAAASH), 90+ GOOD, 40+ OK, less MISS.
 - **Slots**: three reels of cherry, bell, seven and star spin (a symbol every six
   frames, staggered); A stops the reel the blinking A button points at. Three of a
   kind is PERFECT (a SMAAAASH; three sevens hit for 120 %), a pair GOOD (85 %),

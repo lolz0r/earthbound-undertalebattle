@@ -453,7 +453,7 @@ HINTS = [
     "PRESS A IN THE GREEN",        # 0 timing gauge
     "TAP THE BUTTON A NOTE HITS",  # 1 rhythm
     "PRESS A WHEN THEY FRAME IT",  # 2 focus and timed block
-    "MASH THE A BUTTON",           # 3 mash
+    "MASH ANY BUTTON",             # 3 mash
     "PRESS A TO STOP EACH REEL",   # 4 slots
     "HIT THE BUTTONS IN ORDER",    # 5 combo
     "DODGE THE BULLETS",           # 6 dodge box
