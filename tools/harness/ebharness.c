@@ -39,6 +39,7 @@ static unsigned fb_w, fb_h;
 static unsigned pixfmt = RETRO_PIXEL_FORMAT_0RGB1555;
 static uint16_t held = 0;       /* bitmask of RETRO_DEVICE_ID_JOYPAD_* */
 static unsigned long frame_no = 0;
+static uint8_t *wram; static size_t wram_size;
 static const char *outdir = ".";
 
 #define BTN(id) (1u << (id))
@@ -80,7 +81,18 @@ static bool env_cb(unsigned cmd, void *data) {
     case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
-    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+        return true;
+    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS: {
+        const struct retro_memory_map *m = (const struct retro_memory_map *)data;
+        for (unsigned i = 0; i < m->num_descriptors; i++) {
+            const struct retro_memory_descriptor *d = &m->descriptors[i];
+            if (d->ptr && d->start == 0x7E0000 && d->len >= 0x10000) {
+                wram = (uint8_t *)d->ptr + d->offset; wram_size = d->len;
+                fprintf(stderr, "wram from memory map: %zu bytes\n", wram_size);
+            }
+        }
+        return true;
+    }
     case RETRO_ENVIRONMENT_SET_GEOMETRY:
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
     case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
@@ -103,8 +115,16 @@ static void video_cb(const void *data, unsigned width, unsigned height, size_t p
     if (!data) return; /* dupe frame */
     fb_w = width; fb_h = height;
     for (unsigned y = 0; y < height && y < 480; y++) {
-        const uint16_t *src = (const uint16_t *)((const uint8_t *)data + y * pitch);
-        memcpy(&framebuf[y * 512], src, width * 2);
+        if (pixfmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+            const uint32_t *src = (const uint32_t *)((const uint8_t *)data + y * pitch);
+            for (unsigned x = 0; x < width && x < 512; x++) {
+                uint32_t p = src[x];
+                framebuf[y * 512 + x] = (uint16_t)((((p >> 16) & 0xFF) >> 3) << 11 | (((p >> 8) & 0xFF) >> 2) << 5 | ((p & 0xFF) >> 3));
+            }
+        } else {
+            const uint16_t *src = (const uint16_t *)((const uint8_t *)data + y * pitch);
+            memcpy(&framebuf[y * 512], src, width * 2);
+        }
     }
 }
 
@@ -140,7 +160,6 @@ static void *(*retro_get_memory_data_p)(unsigned);
 static size_t (*retro_get_memory_size_p)(unsigned);
 static void (*retro_get_system_av_info_p)(struct retro_system_av_info *);
 
-static uint8_t *wram; static size_t wram_size;
 
 /* ---- symbol table from ld65 map (Exports list), WRAM symbols only ---- */
 struct sym { char name[64]; unsigned long addr; };
@@ -182,6 +201,53 @@ static unsigned long resolve(const char *s) {
     return base + off;
 }
 
+
+static unsigned long parse_num(const char *s);
+/* ---- automated dodging player for playtests ------------------------------ */
+#define BH_TYPE_BLUE_C (7)
+#define BH_TYPE_ORANGE_C (8)
+static long sym_addr(const char *name) { char b[64]; snprintf(b, sizeof b, "%s", name); return (long)parse_num(b); }
+static int16_t rd16(unsigned long a) { return (int16_t)(wram[a] | (wram[a + 1] << 8)); }
+/* returns the best move (dx,dy in {-2,0,2}) for this frame */
+static void dodge_pick(unsigned long dp, unsigned long bul, int *odx, int *ody) {
+    int hx = rd16(dp + 0x12), hy = rd16(dp + 0x14);
+    int x0 = rd16(dp + 0x16), y0 = rd16(dp + 0x18), x1 = rd16(dp + 0x1A), y1 = rd16(dp + 0x1C);
+    int cx = (x0 + x1) / 2 - 8, cy = (y0 + y1) / 2 - 8;
+    double best = -1e9; int bdx = 0, bdy = 0;
+    static const int mv[9][2] = {{0,0},{-2,0},{2,0},{0,-2},{0,2},{-2,-2},{2,-2},{-2,2},{2,2}};
+    for (int m = 0; m < 9; m++) {
+        int dx = mv[m][0], dy = mv[m][1];
+        double score = 1e9;
+        for (int t = 0; t < 20; t++) {
+            int px = hx + dx * (t + 1), py = hy + dy * (t + 1);
+            if (px < x0 + 1) px = x0 + 1; if (px > x1 - 17) px = x1 - 17;
+            if (py < y0 + 1) py = y0 + 1; if (py > y1 - 17) py = y1 - 17;
+            int hcx = px + 8, hcy = py + 8;
+            for (int i = 0; i < 32; i++) {
+                unsigned long r = bul + i * 16;
+                int type = wram[r + 8]; if (!type) continue;
+                int big = wram[r + 11] & 0x80;
+                int moving = (dx || dy);
+                if (type == BH_TYPE_ORANGE_C && moving) continue;   /* orange only hurts a still heart */
+                if (type == BH_TYPE_BLUE_C && !moving) continue;    /* blue only hurts a moving heart */
+                double bx = (rd16(r + 0) + rd16(r + 4) * t + (big ? 16 : 8) * 16) / 16.0;
+                double by = (rd16(r + 2) + rd16(r + 6) * t + (big ? 16 : 8) * 16) / 16.0;
+                double hw = wram[r + 14] + 1.0, hh = wram[r + 15] + 1.0;
+                double ddx = (bx - hcx) / hw, ddy = (by - hcy) / hh;
+                double d = ddx < 0 ? -ddx : ddx; double e = ddy < 0 ? -ddy : ddy; if (e > d) d = e;
+                d -= t * 0.03;                     /* nearer in time = more urgent */
+                if (d < score) score = d;
+            }
+        }
+        /* prefer the middle of the box a little, and staying still very slightly */
+        int fx = hx + dx * 6, fy = hy + dy * 6;
+        double cen = ((fx - cx) * (fx - cx) + (fy - cy) * (fy - cy)) / 20000.0;
+        score = (score > 3.0 ? 3.0 : score) - cen - (m ? 0.001 : 0);
+        if (score > best) { best = score; bdx = dx; bdy = dy; }
+    }
+    *odx = bdx; *ody = bdy;
+}
+
 static void write_png(const char *name) {
     char path[1024];
     snprintf(path, sizeof path, "%s/%s.png", outdir, name);
@@ -197,7 +263,7 @@ static void write_png(const char *name) {
         for (unsigned x = 0; x < fb_w; x++) {
             uint16_t p = framebuf[y * 512 + x];
             unsigned r, g, b;
-            if (pixfmt == RETRO_PIXEL_FORMAT_RGB565) {
+            if (pixfmt == RETRO_PIXEL_FORMAT_RGB565 || pixfmt == RETRO_PIXEL_FORMAT_XRGB8888) {
                 r = (p >> 11) & 31; g = (p >> 5) & 63; b = p & 31;
                 row[x*3] = (r << 3) | (r >> 2); row[x*3+1] = (g << 2) | (g >> 4); row[x*3+2] = (b << 3) | (b >> 2);
             } else {
@@ -270,8 +336,10 @@ int main(int argc, char **argv) {
     void *rom = malloc(rsz); if (fread(rom, 1, rsz, rf) != (size_t)rsz) { fprintf(stderr, "short read\n"); return 1; } fclose(rf);
     struct retro_game_info gi = { .path = argv[2], .data = rom, .size = rsz, .meta = NULL };
     if (!retro_load_game_p(&gi)) { fprintf(stderr, "retro_load_game failed\n"); return 1; }
-    wram = retro_get_memory_data_p(RETRO_MEMORY_SYSTEM_RAM);
-    wram_size = retro_get_memory_size_p(RETRO_MEMORY_SYSTEM_RAM);
+    if (retro_get_memory_size_p(RETRO_MEMORY_SYSTEM_RAM) > 0) {
+        wram = retro_get_memory_data_p(RETRO_MEMORY_SYSTEM_RAM);
+        wram_size = retro_get_memory_size_p(RETRO_MEMORY_SYSTEM_RAM);
+    }
     struct retro_system_av_info av; retro_get_system_av_info_p(&av);
     fprintf(stderr, "loaded; wram=%zu bytes, %ux%u @ %.2f fps\n", wram_size, av.geometry.base_width, av.geometry.base_height, av.timing.fps);
 
@@ -286,6 +354,11 @@ int main(int argc, char **argv) {
         char cmd[64], a1[256], a2[256], a3[256];
         int n = sscanf(p, "%63s %255s %255s %255s", cmd, a1, a2, a3);
         if (n < 1) continue;
+        if (!wram_size && retro_get_memory_size_p(RETRO_MEMORY_SYSTEM_RAM) > 0) {
+            wram = retro_get_memory_data_p(RETRO_MEMORY_SYSTEM_RAM);
+            wram_size = retro_get_memory_size_p(RETRO_MEMORY_SYSTEM_RAM);
+            fprintf(stderr, "wram (late): %zu bytes\n", wram_size);
+        }
         if (!strcmp(cmd, "run")) { run_frames(parse_num(a1)); }
         else if (!strcmp(cmd, "press")) { uint16_t save = held; held |= parse_buttons(a1); run_frames(n >= 3 ? parse_num(a2) : 2); held = save; }
         else if (!strcmp(cmd, "hold")) { held = parse_buttons(a1); }
@@ -316,6 +389,48 @@ int main(int argc, char **argv) {
                 run_frames(1);
             }
             printf("waitmem %05lX==%lX: %s after %lu frames (now %02X)\n", addr, val, i < max ? "ok" : "TIMEOUT", i, wram[addr]);
+            if (i >= max) rc = 3;
+        }
+        else if (!strcmp(cmd, "wait2")) {
+            /* wait2 ADDR1 VAL1 ADDR2 VAL2 [MAX]: run until both bytes match */
+            char a4[256], a5[256];
+            int n2 = sscanf(p, "%63s %255s %255s %255s %255s %255s", cmd, a1, a2, a3, a4, a5);
+            unsigned long ad1 = parse_num(a1), v1 = parse_num(a2), ad2 = parse_num(a3), v2 = parse_num(a4), max = n2 >= 6 ? parse_num(a5) : 600;
+            unsigned long i;
+            for (i = 0; i < max; i++) { if (wram[ad1] == v1 && wram[ad2] == v2) break; run_frames(1); }
+            printf("wait2 %05lX==%lX && %05lX==%lX: %s after %lu frames (now %02X %02X)\n", ad1, v1, ad2, v2, i < max ? "ok" : "TIMEOUT", i, wram[ad1], wram[ad2]);
+            if (i >= max) rc = 3;
+        }
+        else if (!strcmp(cmd, "dodge")) {
+            /* dodge MAXFRAMES: play the current dodge phase with the automated player until it ends */
+            unsigned long dp = (unsigned long)sym_addr("BH_DP"), bul = (unsigned long)sym_addr("BH_BULLETS");
+            unsigned long max = parse_num(a1), i; uint16_t save = held;
+            for (i = 0; i < max; i++) {
+                if (!wram[dp]) break;                 /* BH_ACTIVE */
+                int dx, dy; dodge_pick(dp, bul, &dx, &dy);
+                uint16_t h = 0;
+                if (dx < 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_LEFT); if (dx > 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_RIGHT);
+                if (dy < 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_UP);   if (dy > 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_DOWN);
+                held = h; run_frames(1);
+            }
+            held = save;
+            printf("dodge: %lu frames, hits=%u frame=%u active=%u\n", i, wram[dp + 0x0A], (unsigned)rd16(dp + 0x2A), wram[dp]);
+        }
+        else if (!strcmp(cmd, "spam2")) {
+            /* spam2 BTNS INTERVAL MAXFRAMES ADDR1 VAL1 ADDR2 VAL2: like spam, stopping once both bytes match */
+            char a4[256], a5[256], a6[256], a7[256];
+            int n2 = sscanf(p, "%63s %255s %255s %255s %255s %255s %255s %255s", cmd, a1, a2, a3, a4, a5, a6, a7);
+            uint16_t btn = parse_buttons(a1);
+            unsigned long interval = parse_num(a2), max = parse_num(a3);
+            unsigned long ad1 = parse_num(a4), v1 = parse_num(a5), ad2 = n2 >= 8 ? parse_num(a6) : 0, v2 = n2 >= 8 ? parse_num(a7) : 0;
+            unsigned long i; uint16_t save = held;
+            for (i = 0; i < max; i++) {
+                if (wram[ad1] == v1 && (n2 < 8 || wram[ad2] == v2)) break;
+                held = (i % interval) < 4 ? (save | btn) : save;
+                run_frames(1);
+            }
+            held = save;
+            printf("spam2 %s: %s after %lu frames (WRAM[%05lX]=%02X WRAM[%05lX]=%02X)\n", a1, i < max ? "condition met" : "TIMEOUT", i, ad1, wram[ad1], ad2, wram[ad2]);
             if (i >= max) rc = 3;
         }
         else if (!strcmp(cmd, "spam")) {

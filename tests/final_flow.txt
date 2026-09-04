@@ -1,0 +1,125 @@
+load after_intro
+poke GAME_STATE+122 01 02
+poke GAME_STATE+150 01 02
+poke GAME_STATE+174 02 02
+poke PARTY_CHARACTERS+5 63
+poke PARTY_CHARACTERS+10 E7 03
+poke PARTY_CHARACTERS+21 FF FF FF
+poke PARTY_CHARACTERS+69 E7 03 E7 03
+poke PARTY_CHARACTERS+100 63
+poke PARTY_CHARACTERS+105 E7 03
+poke PARTY_CHARACTERS+116 FF FF FF
+poke PARTY_CHARACTERS+164 E7 03 E7 03
+run 5
+press a 4
+run 20
+press a 4
+waitmem BATTLE_MODE_FLAG 1 900
+run 400
+shot ff_menu1
+poke BATTLERS_TABLE+719 01 00 01 00
+press a 4
+run 20
+press right 4
+run 10
+press a 4
+run 40
+press down 4
+run 8
+press right 4
+run 8
+press a 4
+spam a 40 600 BH_DP 1
+waitmem BH_DP+84 128 600
+press a 2
+run 60
+shot ff_hit
+spam a 30 3000 GIYGAS_PHASE 2
+shot ff_phase2
+spam a 30 3000 CURRENT_BATTLE_GROUP 221
+shot ff_g477
+peek CURRENT_BATTLE_SPRITEMAPS_ALLOCATED 2
+peek BH_DP+220 2
+run 30
+poke BATTLERS_TABLE+641 01 00 01 00
+poke BATTLERS_TABLE+17 E7 03 E7 03
+poke BATTLERS_TABLE+95 E7 03 E7 03
+spam a 30 4000 GIYGAS_PHASE 4
+shot ff_phase4
+spam a 30 3000 CURRENT_BATTLE_GROUP 222
+shot ff_g478
+peek CURRENT_BATTLE_SPRITEMAPS_ALLOCATED 2
+peek BH_DP+220 2
+run 600
+shot ff_menu3
+poke BATTLERS_TABLE+17 E7 03 E7 03
+poke BATTLERS_TABLE+95 E7 03 E7 03
+press a 4
+run 20
+press a 4
+run 60
+shot ff_paula_menu
+press right 4
+run 8
+press right 4
+run 8
+shot ff_pray_sel
+press a 4
+run 30
+save pray1_start
+spam a 40 600 BH_DP 1
+waitmem BH_DP+84 128 600
+press a 2
+run 60
+shot ff_after_gauge
+spam a 30 300
+shot ff_pr01
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr02
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr03
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr04
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr05
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr06
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr07
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr08
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr09
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+spam a 30 300
+shot ff_pr10
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek BATTLE_MODE_FLAG 1
+save after_pray1

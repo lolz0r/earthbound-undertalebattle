@@ -1,0 +1,83 @@
+load after_intro
+poke GAME_STATE+122 01 02
+poke GAME_STATE+150 01 02
+poke GAME_STATE+174 02 02
+poke PARTY_CHARACTERS+5 63
+poke PARTY_CHARACTERS+10 E7 03
+poke PARTY_CHARACTERS+21 FF FF FF
+poke PARTY_CHARACTERS+69 E7 03 E7 03
+poke PARTY_CHARACTERS+100 63
+poke PARTY_CHARACTERS+105 E7 03
+poke PARTY_CHARACTERS+116 FF FF FF
+poke PARTY_CHARACTERS+164 E7 03 E7 03
+run 5
+poke CURRENT_BATTLE_GROUP DB 01
+poke ENEMIES_IN_BATTLE 02 00
+poke ENEMIES_IN_BATTLE_IDS DA 00 D8 00
+poke BATTLE_INITIATIVE 01 00
+poke BATTLE_MODE FF FF
+waitmem BATTLE_MODE_FLAG 1 900
+run 365
+shot gd_menu
+poke BATTLERS_TABLE+719 01 00 01 00
+press a 4
+run 20
+press right 4
+run 10
+shot gd_target
+press a 4
+run 40
+press down 4
+run 8
+press right 4
+run 8
+shot gd_paula
+press a 4
+spam a 40 600 BH_DP 1
+waitmem BH_DP+84 128 600
+press a 2
+run 60
+shot gd_hit
+peek BATTLERS_TABLE+719 4
+spam a 30 200
+shot gd_s200
+spam a 30 200
+shot gd_s400
+spam a 30 200
+shot gd_s600
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek CURRENT_BATTLE_SPRITEMAPS_ALLOCATED 2
+peek BH_DP+220 2
+spam a 30 1500 CURRENT_BATTLE_GROUP DD
+shot gd_g477
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+peek CURRENT_BATTLE_SPRITEMAPS_ALLOCATED 2
+peek BH_DP+220 2
+peek BATTLERS_TABLE+641 6
+run 30
+poke BATTLERS_TABLE+641 01 00 01 00
+poke PARTY_CHARACTERS+69 E7 03 E7 03
+poke PARTY_CHARACTERS+164 E7 03 E7 03
+spam a 30 3000 GIYGAS_PHASE 04
+shot gd_phase4
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 1500 CURRENT_BATTLE_GROUP DE
+shot gd_g478
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_SPRITEMAPS_ALLOCATED 2
+peek BH_DP+220 2
+run 100
+shot gd_p3_100
+run 100
+shot gd_p3_200
+run 100
+shot gd_p3_300
+run 100
+shot gd_p3_400
+run 100
+shot gd_p3_500
+run 100
+shot gd_p3_600
+save phase3

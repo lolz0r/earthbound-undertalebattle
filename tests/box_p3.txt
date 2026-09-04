@@ -1,0 +1,16 @@
+load p3_start4
+poke BATTLERS_TABLE+17 E7 03 E7 03
+poke BATTLERS_TABLE+95 E7 03 E7 03
+poke BATTLERS_TABLE+173 E7 03 E7 03
+poke BATTLERS_TABLE+251 E7 03 E7 03
+spam a 30 3000 BH_DP 1
+peek BH_DP+82 2
+run 1
+shot p3box_a
+run 30
+shot p3box_b
+spam a 30 3000 BH_DP 0
+spam a 30 3000 BH_DP 1
+peek BH_DP+82 2
+run 30
+shot p3box_c

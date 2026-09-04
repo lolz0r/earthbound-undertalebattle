@@ -81,11 +81,13 @@ def m_rise(r, t, sp):
 def m_ring(r, t, sp):
     return [f"\t\tBH_RING {t()}, {r.choice([5, 6])}, {sp - r.randint(0, 4)}", f"\t\tBH_WAIT {r.randint(70, 90)}"]
 
-def m_fan(r, t, sp, w=160):
+def m_fan(r, t, sp, w=160, gap=20):
+    # gap: 20 px between the three bullets for 16x16 sprites; 32x32 bullets need 44 px or the
+    # fan is a solid wall wider than the heart can escape (playtested with tools/playtest_enemies.py)
     v = sp + r.randint(-2, 4)
     c = w // 2 - 8
-    return [f"\t\tBH_SPAWN {t()}, {c - 20}, -20, {-(v // 2)}, {v}", f"\t\tBH_SPAWN {t()}, {c}, -20, 0, {v}",
-            f"\t\tBH_SPAWN {t()}, {c + 20}, -20, {v // 2}, {v}", f"\t\tBH_WAIT {r.randint(50, 70)}"]
+    return [f"\t\tBH_SPAWN {t()}, {c - gap}, -20, {-(v // 2)}, {v}", f"\t\tBH_SPAWN {t()}, {c}, -20, 0, {v}",
+            f"\t\tBH_SPAWN {t()}, {c + gap}, -20, {v // 2}, {v}", f"\t\tBH_WAIT {r.randint(50, 70)}"]
 
 def m_gatling(r, t, sp):
     e = r.choice(["BH_EDGE_LEFT", "BH_EDGE_RIGHT"])
@@ -159,13 +161,24 @@ def program(eid, cat, boss, which, salt=0):
     chosen = [moves[r.randrange(len(moves))] for _ in range(nmoves)]
     chosen[0] = moves[0] if which == "A" else moves[1]   # open with the category's signature move
     for mv in chosen:
-        lines += mv(r, t, sp, w) if mv is m_fan else mv(r, t, sp)
+        lines += mv(r, t, sp, w, 44 if BIGSPRITE.get(eid) else 20) if mv is m_fan else mv(r, t, sp)
     lines += ["\tBH_ENDLOOP", ""]
     # the program's shape: its sequence of opcodes (so no two enemies attack the same way)
     shape = tuple(l.split()[0] for l in lines if l.startswith("\t\tBH_"))
     return lines, shape
 
+BIGSPRITE = {}
+
+def load_bigsprite():
+    """bit 7 of each enemy's first hit box (tools/gen_bh_enemy_gfx.py) flags a 32x32 bullet sheet"""
+    path = os.path.join(ROOT, "src", "bin", "bh", "bh_enemy_hitboxes.bin")
+    if os.path.exists(path):
+        d = open(path, "rb").read()
+        for eid in range(len(d) // 8):
+            BIGSPRITE[eid] = bool(d[eid * 8] & 0x80)
+
 def main():
+    load_bigsprite()
     enemies = parse_enemies()
     programs, seen_prog, seen_shape, seen_rec, records = [], set(), set(), set(), []
     for eid, name, etype, level, hp, boss in enemies:

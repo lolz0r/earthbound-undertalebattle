@@ -1,0 +1,74 @@
+load after_intro
+poke GAME_STATE+122 01 02 03 04
+poke GAME_STATE+150 01 02 03 04
+poke GAME_STATE+174 04 04
+poke EVENT_FLAGS+9 02
+poke EVENT_FLAGS+27 08
+poke EVENT_FLAGS+46 08
+poke EVENT_FLAGS+81 04
+poke PARTY_CHARACTERS+5 63
+poke PARTY_CHARACTERS+10 E7 03
+poke PARTY_CHARACTERS+21 FF FF FF
+poke PARTY_CHARACTERS+69 E7 03 E7 03
+poke PARTY_CHARACTERS+100 63
+poke PARTY_CHARACTERS+105 E7 03
+poke PARTY_CHARACTERS+116 FF FF FF
+poke PARTY_CHARACTERS+164 E7 03 E7 03
+poke PARTY_CHARACTERS+195 63
+poke PARTY_CHARACTERS+200 E7 03
+poke PARTY_CHARACTERS+211 FF FF FF
+poke PARTY_CHARACTERS+259 E7 03 E7 03
+poke PARTY_CHARACTERS+290 63
+poke PARTY_CHARACTERS+295 E7 03
+poke PARTY_CHARACTERS+306 FF FF FF
+poke PARTY_CHARACTERS+354 E7 03 E7 03
+run 5
+press a 4
+run 20
+press a 4
+waitmem BATTLE_MODE_FLAG 1 900
+run 400
+shot f4_menu1
+poke BATTLERS_TABLE+719 01 00 01 00
+press a 4
+run 20
+press right 4
+run 10
+press a 4
+run 40
+press down 4
+run 8
+press right 4
+run 8
+press a 4
+run 60
+press down 4
+run 8
+press right 4
+run 8
+press a 4
+run 60
+press down 4
+run 8
+press right 4
+run 8
+press a 4
+shot f4_menus_done
+spam a 40 600 BH_DP 1
+waitmem BH_DP+84 128 600
+press a 2
+run 60
+spam a 30 4000 GIYGAS_PHASE 2
+shot f4_phase2
+spam a 30 3000 CURRENT_BATTLE_GROUP 221
+shot f4_g477
+run 30
+poke BATTLERS_TABLE+641 01 00 01 00
+poke BATTLERS_TABLE+17 E7 03 E7 03
+poke BATTLERS_TABLE+95 E7 03 E7 03
+poke BATTLERS_TABLE+173 E7 03 E7 03
+poke BATTLERS_TABLE+251 E7 03 E7 03
+spam a 30 6000 GIYGAS_PHASE 4
+shot f4_phase4
+spam a 30 3000 CURRENT_BATTLE_GROUP 222
+save p3_start4

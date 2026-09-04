@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `68b267225a3d3c11f360665601bf880152f380a4` |
+| output: patched ROM | 4,194,304 bytes | `b7be25555336720eed9f85ed477ca1bc8ffce757` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -87,6 +87,38 @@ The box grows out of its centre when a phase starts and shrinks away afterwards.
 Everything else (menus, PSI, items, status effects, the rolling HP meter, backgrounds,
 enemy sprites, experience) is untouched.
 
+## Classic mode, rolling HP and fairness
+
+- **Auto Fight turns the minigames off.** Pick Auto Fight in the command menu and the
+  round plays like the original game: no timing gauge, no dodge box, the original
+  hit/miss/SMAAAASH rolls decide everything. Press B to leave auto mode again. Use it
+  for the trash fights that would otherwise be a minigame every turn.
+- **The HP/PP meters stop rolling while a minigame plays.** Mortal damage only keeps
+  rolling once the box has closed, so a quick player can still reach the menu and heal.
+- **Every dodge phase starts with a 20-frame grace period**, rings always leave a
+  two-slot opening and close at 2.1 px/frame at most, no bullet moves faster than
+  2.5 px/frame, and fans of 32x32 bullets are spaced so the heart fits between them.
+  `tools/playtest_enemies.py` plays every enemy's two programs with the harness's
+  automated player (`dodge`) and with a still heart; the tuned set gives the automated
+  player no hit before frame 60 in 460 phases and a still heart at least 36 frames.
+
+## Changes
+
+### 2026-09-04
+
+- Fixed the corrupted dodge box in the Giygas prayer phase: the phase transitions
+  reload the enemy sprite VRAM over the engine's tiles, which are now re-uploaded on
+  every reload (`UNKNOWN_C2C21F`).
+- The reported freeze on the first prayer could not be reproduced: the scripted
+  final battle with a four-member party was played through all nine prayers on
+  snes9x and on the bsnes-mercury accuracy core, with the shipped ROM and with this
+  build, without a hang. Two hardware-only risks were removed anyway: the window
+  HDMA moved to channel 7 (the game's oval-window effects can use channel 6) and the
+  disabled anti-piracy check now initialises its flag, which random power-on RAM
+  could otherwise leave set (encounter swarm). If it still freezes for you, please
+  report the emulator or flash cart and what was on screen.
+- Auto Fight as classic mode, frozen HP roll during minigames, fairness tuning (above).
+
 ## Layout
 
 ```
@@ -118,7 +150,7 @@ tests/                    harness scripts (*.txt), run.sh, captured screenshots 
 ## Building from source
 
 The engine lives in `patches/ebsrc-bullet-hell.patch`, a diff against ebsrc commit
-`0197d6c13ef11ad3280e9388e08a646ab1030d15` (32 source files: the engine, its include
+`0197d6c13ef11ad3280e9388e08a646ab1030d15` (33 source files: the engine, its include
 files, the bank configuration and the hooks in the game's battle code). Everything under
 ebsrc's `src/bin/` is generated, either extracted from your ROM by ebbinex or written by
 the generators in `tools/`, so none of it is in git.
@@ -191,6 +223,23 @@ are plain text: `run N`, `press a 6`, `hold right`, `poke SYMBOL 01 00`,
 A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTLE`,
 `ENEMIES_IN_BATTLE_IDS`, `BATTLE_INITIATIVE` (2 = enemies first) and `BATTLE_MODE`
 (`FF FF`), from anywhere in the overworld.
+
+### Harness commands added for the Giygas and playtest work
+
+- `wait2 A V1 B V2 [MAX]` waits until two bytes match at once; `spam2 BTN INT MAX A V1 B V2`
+  taps a button until they do. `wait2 CURRENT_FOCUS_WINDOW 0x0F BATTLE_MENU_CURRENT_CHARACTER_ID k`
+  is "the command menu is open for party member k".
+- `dodge MAX` plays the current dodge phase with a simple automated player (predicts every
+  bullet 20 frames ahead, keeps to the box, respects blue/orange rules) and reports the
+  frames survived.
+- The harness also runs other libretro cores (WRAM is taken from the core's memory map when
+  `retro_get_memory` has none, 32-bit pixel formats are converted); bsnes-mercury accuracy
+  was used as a second opinion. States are per core.
+- Scripted battles: patching the "Who are you talking to?" fallback text at ROM `$C7C588`
+  with `1F 23 DB 01 02` makes any Talk-to start the final battle from a script, exactly like
+  the game does (`tests/final_flow*.txt`, `tests/prayers_all.txt`). The prayer cutscenes need
+  the Saturn Valley NPC flags (`EVENT_FLAGS` pokes in those scripts) or they never return.
+- Engine test hook: `poke BH_DP+0x9A 1|2` forces an enemy's first or second program.
 
 ## How the engine hooks into the game
 

@@ -1,0 +1,232 @@
+load p3_start4
+run 1560
+shot g4_menu
+poke BATTLERS_TABLE+17 E7 03 E7 03
+poke BATTLERS_TABLE+95 E7 03 E7 03
+poke BATTLERS_TABLE+173 E7 03 E7 03
+poke BATTLERS_TABLE+251 E7 03 E7 03
+press a 4
+run 20
+press a 4
+run 60
+shot g4_paula_menu
+press right 4
+run 8
+press right 4
+run 8
+shot g4_pray_sel
+press a 4
+run 60
+shot g4_jeff_menu
+press a 4
+run 20
+press a 4
+run 60
+shot g4_poo_menu
+press a 4
+run 20
+press a 4
+run 30
+shot g4_after_menus
+save pray1_start4
+spam a 30 200
+shot g4_pr01
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr02
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr03
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr04
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr05
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr06
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr07
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr08
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr09
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr10
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr11
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr12
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr13
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr14
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr15
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr16
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr17
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr18
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr19
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr20
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr21
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr22
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr23
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr24
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr25
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr26
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr27
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr28
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr29
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr30
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr31
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr32
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr33
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr34
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr35
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr36
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr37
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr38
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr39
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+spam a 30 200
+shot g4_pr40
+peek BATTLE_MODE_FLAG 1
+peek GIYGAS_PHASE 2
+peek CURRENT_BATTLE_GROUP 2
+save after_pray1_4
