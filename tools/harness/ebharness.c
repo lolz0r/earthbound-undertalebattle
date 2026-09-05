@@ -157,6 +157,7 @@ static size_t (*retro_serialize_size_p)(void);
 static bool (*retro_serialize_p)(void *, size_t);
 static bool (*retro_unserialize_p)(const void *, size_t);
 static void *(*retro_get_memory_data_p)(unsigned);
+static void (*ebh_get_cpu_p)(uint32_t *);   /* optional: only the patched snes9x core exports it */
 static size_t (*retro_get_memory_size_p)(unsigned);
 static void (*retro_get_system_av_info_p)(struct retro_system_av_info *);
 
@@ -206,6 +207,16 @@ static unsigned long parse_num(const char *s);
 /* ---- automated dodging player for playtests ------------------------------ */
 #define BH_TYPE_BLUE_C (7)
 #define BH_TYPE_ORANGE_C (8)
+/* nearest ROM/RAM symbol at or below addr, as "NAME+off" */
+static const char *sym_for(unsigned long addr) {
+    static char buf[96]; size_t best = (size_t)-1;
+    if (addr < 0x400000 && (addr & 0xFFFF) >= 0x8000) addr |= 0xC00000;   /* bank 00-3F mirror of C0-FF */
+    for (size_t i = 0; i < nsyms; i++)
+        if (syms[i].addr <= addr && (best == (size_t)-1 || syms[i].addr > syms[best].addr) && addr - syms[i].addr < 0x4000) best = i;
+    if (best == (size_t)-1) snprintf(buf, sizeof buf, "?");
+    else snprintf(buf, sizeof buf, "%s+%lx", syms[best].name, addr - syms[best].addr);
+    return buf;
+}
 static long sym_addr(const char *name) { char b[64]; snprintf(b, sizeof b, "%s", name); return (long)parse_num(b); }
 static int16_t rd16(unsigned long a) { return (int16_t)(wram[a] | (wram[a + 1] << 8)); }
 /* returns the best move (dx,dy in {-2,0,2}) for this frame */
@@ -320,6 +331,7 @@ int main(int argc, char **argv) {
     LOAD_SYM(retro_init); LOAD_SYM(retro_deinit); LOAD_SYM(retro_load_game); LOAD_SYM(retro_run);
     LOAD_SYM(retro_serialize_size); LOAD_SYM(retro_serialize); LOAD_SYM(retro_unserialize);
     LOAD_SYM(retro_get_memory_data); LOAD_SYM(retro_get_memory_size); LOAD_SYM(retro_get_system_av_info);
+    ebh_get_cpu_p = (void (*)(uint32_t *))dlsym(core, "ebh_get_cpu");
 
     retro_set_environment_p(env_cb);
     retro_set_video_refresh_p(video_cb);
@@ -416,6 +428,94 @@ int main(int argc, char **argv) {
             held = save;
             printf("dodge: %lu frames, hits=%u frame=%u active=%u\n", i, wram[dp + 0x0A], (unsigned)rd16(dp + 0x2A), wram[dp]);
         }
+        else if (!strcmp(cmd, "sram")) {
+            /* sram FILE: load a battery save (.srm) into the cartridge SRAM (do it before the game reads it, i.e. at boot) */
+            FILE *f = fopen(a1, "rb"); void *sr = retro_get_memory_data_p(RETRO_MEMORY_SAVE_RAM); size_t sz = retro_get_memory_size_p(RETRO_MEMORY_SAVE_RAM);
+            if (!f || !sr) { printf("sram: cannot open %s or no SRAM (%p, %zu)\n", a1, sr, sz); if (f) fclose(f); }
+            else { size_t got = fread(sr, 1, sz, f); fclose(f); printf("sram: loaded %zu of %zu bytes from %s\n", got, sz, a1); }
+        }
+        else if (!strcmp(cmd, "cpu")) {
+            /* cpu: print the CPU registers (needs the patched snes9x core) */
+            if (!ebh_get_cpu_p) printf("cpu: this core has no ebh_get_cpu\n");
+            else { uint32_t r[8]; ebh_get_cpu_p(r);
+                printf("cpu: pc=%06X (%s) s=%04X d=%04X db=%02X a=%04X x=%04X y=%04X p=%04X\n", r[0], sym_for(r[0]), r[1], r[2], r[3], r[4], r[5], r[6], r[7]); }
+        }
+        else if (!strcmp(cmd, "trace")) {
+            /* trace N: run N frames, sampling the PC after each; print the distinct places (count, first frame) */
+            unsigned long max = parse_num(a1), i; struct { uint32_t pc; unsigned long cnt, first; } seen[64]; int ns = 0;
+            if (!ebh_get_cpu_p) { printf("trace: this core has no ebh_get_cpu\n"); continue; }
+            for (i = 0; i < max; i++) {
+                run_frames(1); uint32_t r[8]; ebh_get_cpu_p(r); int k;
+                for (k = 0; k < ns; k++) if (seen[k].pc == r[0]) break;
+                if (k == ns && ns < 64) { seen[ns].pc = r[0]; seen[ns].cnt = 0; seen[ns].first = i; ns++; }
+                if (k < 64) seen[k].cnt++;
+            }
+            printf("trace %lu frames: %d distinct pcs\n", max, ns);
+            for (int k = 0; k < ns; k++) printf("  pc=%06X (%s) x%lu first@%lu\n", seen[k].pc, sym_for(seen[k].pc), seen[k].cnt, seen[k].first);
+            { uint32_t r[8]; ebh_get_cpu_p(r); printf("  now: pc=%06X s=%04X d=%04X db=%02X\n", r[0], r[1], r[2], r[3]); }
+        }
+        else if (!strcmp(cmd, "spamu")) {
+            /* spamu BTNS INTERVAL MAXFRAMES ADDR VAL: press every INTERVAL frames (first press after one interval)
+               until the byte at ADDR no longer equals VAL */
+            char a4[256], a5[256];
+            sscanf(p, "%63s %255s %255s %255s %255s %255s", cmd, a1, a2, a3, a4, a5);
+            uint16_t btn = parse_buttons(a1);
+            unsigned long interval = parse_num(a2), max = parse_num(a3), ad = parse_num(a4), v = parse_num(a5), i; uint16_t save = held;
+            for (i = 0; i < max; i++) {
+                if (wram[ad] != v) break;
+                unsigned long ph = (i + 1) % interval;
+                held = (ph == 0 || ph > interval - 4) ? (save | btn) : save;
+                run_frames(1);
+            }
+            held = save;
+            printf("spamu %s: %s after %lu frames (WRAM[%05lX]=%02X)\n", a1, i < max ? "changed" : "TIMEOUT", i, ad, wram[ad]);
+            if (i >= max) rc = 3;
+        }
+        else if (!strcmp(cmd, "spamor")) {
+            /* spamor BTNS INTERVAL MAXFRAMES ADDR VAL1 VAL2: press every INTERVAL frames (first press after one
+               interval) until the byte at ADDR equals VAL1 or VAL2 */
+            char a4[256], a5[256], a6[256];
+            sscanf(p, "%63s %255s %255s %255s %255s %255s %255s", cmd, a1, a2, a3, a4, a5, a6);
+            uint16_t btn = parse_buttons(a1);
+            unsigned long interval = parse_num(a2), max = parse_num(a3), ad = parse_num(a4), v1 = parse_num(a5), v2 = parse_num(a6), i; uint16_t save = held;
+            for (i = 0; i < max; i++) {
+                if (wram[ad] == v1 || wram[ad] == v2) break;
+                unsigned long ph = (i + 1) % interval;
+                held = (ph == 0 || ph > interval - 4) ? (save | btn) : save;
+                run_frames(1);
+            }
+            held = save;
+            printf("spamor %s: %s after %lu frames (WRAM[%05lX]=%02X)\n", a1, i < max ? "condition met" : "TIMEOUT", i, ad, wram[ad]);
+            if (i >= max) rc = 3;
+        }
+        else if (!strcmp(cmd, "playround")) {
+            /* playround MAXFRAMES [REFILL] [HOLD]: play until a command menu (window $0F/$12) has focus: the dodge AI
+               steers through dodge boxes, A is tapped every 30 frames otherwise (text, minigames, timed blocks);
+               with REFILL > 0 the four party members' HP is topped up to 999 every REFILL frames */
+            unsigned long max = parse_num(a1), refill = n >= 3 ? parse_num(a2) : 0, hold = n >= 4 ? parse_num(a3) : 0, i; uint16_t save = held;
+            unsigned long dp = (unsigned long)sym_addr("BH_DP"), bul = (unsigned long)sym_addr("BH_BULLETS");
+            unsigned long focus = (unsigned long)sym_addr("CURRENT_FOCUS_WINDOW"), bt = (unsigned long)sym_addr("BATTLERS_TABLE");
+            unsigned long dodged = 0, taps = 0; unsigned dead = 0;
+            for (int k = 0; k < 4; k++) { unsigned long h = bt + 78 * k + 17; if (!(wram[h] | wram[h + 1])) dead |= 1 << k; }
+            for (i = 0; i < max; i++) {
+                if (wram[focus] == 0x0F || wram[focus] == 0x12) break;
+                if (refill && i % refill == 0) for (int k = 0; k < 4; k++) { unsigned long h = bt + 78 * k + 17;
+                    if (wram[h] | wram[h + 1]) { wram[h] = 0xE7; wram[h + 1] = 3; wram[h + 2] = 0xE7; wram[h + 3] = 3; }
+                    else if (!(dead & (1 << k))) { dead |= 1 << k; printf("playround: party member %d has 0 HP at frame %lu (attacker %04X, box active %u mode %u)\n", k, i,
+                        (unsigned)rd16((unsigned long)sym_addr("CURRENT_ATTACKER")), wram[dp], wram[dp + 0x52]); } }
+                if (wram[dp] && wram[dp + 0x52] == 0) {      /* BH_ACTIVE and BH_MODE == dodge */
+                    int dx, dy; dodge_pick(dp, bul, &dx, &dy); uint16_t h = 0;
+                    if (dx < 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_LEFT); if (dx > 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_RIGHT);
+                    if (dy < 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_UP);   if (dy > 0) h |= BTN(RETRO_DEVICE_ID_JOYPAD_DOWN);
+                    held = save | h; dodged++;
+                } else if (hold) { held = save | BTN(RETRO_DEVICE_ID_JOYPAD_A); taps++; }   /* a player holding A through everything */
+                else { unsigned long ph = (i + 1) % 30; held = (ph == 0 || ph > 26) ? (save | BTN(RETRO_DEVICE_ID_JOYPAD_A)) : save; if (ph == 0) taps++; }
+                run_frames(1);
+            }
+            held = save;
+            printf("playround: %s after %lu frames (focus=%02X, %lu dodge frames, %lu taps)\n", i < max ? "menu" : "TIMEOUT", i, wram[focus], dodged, taps);
+            if (i >= max) rc = 3;
+        }
         else if (!strcmp(cmd, "waitle")) {
             /* waitle ADDR VAL [MAX]: run until the 16-bit word at ADDR is <= VAL */
             unsigned long addr = parse_num(a1), val = parse_num(a2), max = n >= 4 ? parse_num(a3) : 600, i;
@@ -423,21 +523,24 @@ int main(int argc, char **argv) {
             printf("waitle %05lX<=%lu: %s after %lu frames (now %u)\n", addr, val, i < max ? "ok" : "TIMEOUT", i, wram[addr] | (wram[addr + 1] << 8));
             if (i >= max) rc = 3;
         }
-        else if (!strcmp(cmd, "spam2")) {
-            /* spam2 BTNS INTERVAL MAXFRAMES ADDR1 VAL1 ADDR2 VAL2: like spam, stopping once both bytes match */
+        else if (!strcmp(cmd, "spam2") || !strcmp(cmd, "spamd")) {
+            /* spam2 BTNS INTERVAL MAXFRAMES ADDR1 VAL1 ADDR2 VAL2: like spam, stopping once both bytes match;
+               spamd: the same with the first press delayed by one interval (a menu that is about to open is not pressed) */
             char a4[256], a5[256], a6[256], a7[256];
             int n2 = sscanf(p, "%63s %255s %255s %255s %255s %255s %255s %255s", cmd, a1, a2, a3, a4, a5, a6, a7);
+            bool delayed = cmd[4] == 'd';
             uint16_t btn = parse_buttons(a1);
             unsigned long interval = parse_num(a2), max = parse_num(a3);
             unsigned long ad1 = parse_num(a4), v1 = parse_num(a5), ad2 = n2 >= 8 ? parse_num(a6) : 0, v2 = n2 >= 8 ? parse_num(a7) : 0;
             unsigned long i; uint16_t save = held;
             for (i = 0; i < max; i++) {
                 if (wram[ad1] == v1 && (n2 < 8 || wram[ad2] == v2)) break;
-                held = (i % interval) < 4 ? (save | btn) : save;
+                unsigned long ph = delayed ? (i + 1) % interval : i % interval;
+                held = (delayed ? ph == 0 || ph > interval - 4 : ph < 4) ? (save | btn) : save;
                 run_frames(1);
             }
             held = save;
-            printf("spam2 %s: %s after %lu frames (WRAM[%05lX]=%02X WRAM[%05lX]=%02X)\n", a1, i < max ? "condition met" : "TIMEOUT", i, ad1, wram[ad1], ad2, wram[ad2]);
+            printf("%s %s: %s after %lu frames (WRAM[%05lX]=%02X WRAM[%05lX]=%02X)\n", cmd, a1, i < max ? "condition met" : "TIMEOUT", i, ad1, wram[ad1], ad2, wram[ad2]);
             if (i >= max) rc = 3;
         }
         else if (!strcmp(cmd, "spam")) {

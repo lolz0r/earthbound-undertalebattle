@@ -292,7 +292,48 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
 `ENEMIES_IN_BATTLE_IDS`, `BATTLE_INITIATIVE` (2 = enemies first) and `BATTLE_MODE`
 (`FF FF`), from anywhere in the overworld.
 
+### Playing the whole final battle through the game's own script
+
+`tools/giygas_playthrough.py` plays the Giygas fight from the start of enemy group 475 to
+the end of the ninth prayer with nothing but pad input, one command menu or one round per
+harness run, and locates a hang if a round never comes back:
+
+```
+python3 tools/make_scripted_rom.py                     # build-debug/: a Talk-to starts battle group 475
+python3 tools/giygas_playthrough.py                    # synthetic level-99 party from the after_intro state
+python3 tools/giygas_playthrough.py --sram tests/out/my.srm --no-refill   # from a real battery save, no HP top-ups
+python3 tools/giygas_playthrough.py --core mercury --out tests/out_merc_new  # bsnes-mercury (states are per core)
+```
+
+At every menu it reads whose it is and what the first command says (from the game's own
+menu tables, so "Do Nothing" is recognised when the game takes attacking away), then Ness,
+Jeff and Poo Bash the vulnerable enemy and Paula Bashes until her menu offers the final
+prayers (`--pray-early` makes her pray from the second phase on, which runs the random
+prayer effects). Rounds are played by `playround`: the dodge AI steers through dodge
+boxes, A is tapped (or held with `--hold-a`) through text, minigames and timed blocks,
+HP is topped up every frame unless `--no-refill`. Pokey's two speeches, the Devil's
+Machine, Giygas's three forms, the eight prayer cutscenes and the player's prayer all
+happen through the game's script. States are saved per step (`<tag>_s<N>.st`), so a
+run can be resumed with `--start-state`. When no menu returns within `--round-max`
+frames the driver prints the CPU registers and a 120-frame PC sample (`cpu`, `trace`,
+from the patched snes9x core: `tools/snes9x-ebh-probe.patch` adds `ebh_get_cpu` to the
+libretro build).
+
+Results on 2026-09-05 (build e7dbd18): the complete battle, all nine prayers and the
+ending were reached on snes9x and on bsnes-mercury, with the synthetic party, with the
+random early prayers, with three different RNG paths, holding A, and from a player's
+real battery save both with and without HP top-ups. No hang was found; every run that
+"lost its menu" had won and was already in the ending.
+
 ### Harness commands added for the Giygas and playtest work
+
+- `cpu` prints the 65816 registers with the nearest map symbol; `trace N` runs N frames
+  and lists the distinct PCs seen after each frame (needs the patched snes9x core).
+- `spamd` is `spam2` with the first press delayed by one interval (a menu about to open is
+  not pressed); `spamu BTN INT MAX A V` taps until the byte at A differs from V;
+  `spamor BTN INT MAX A V1 V2` taps until it equals V1 or V2.
+- `playround MAX [REFILL] [HOLD]` plays until a command window has focus (see above).
+- `sram FILE` loads a battery save into the cartridge SRAM (use before the title screen).
 
 - `wait2 A V1 B V2 [MAX]` waits until two bytes match at once; `spam2 BTN INT MAX A V1 B V2`
   taps a button until they do. `wait2 CURRENT_FOCUS_WINDOW 0x0F BATTLE_MENU_CURRENT_CHARACTER_ID k`

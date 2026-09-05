@@ -1,0 +1,32 @@
+diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
+index 6060767..8a22aaa 100644
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -2169,3 +2169,17 @@ void S9xAutoSaveSRAM()
+ {
+     return;
+ }
++
++
++/* ebharness probe: the 65816 registers after the last retro_run (pc = PBPC, s, d, db, a, x, y, p) */
++extern "C" RETRO_API void ebh_get_cpu(uint32_t *out)
++{
++    out[0] = Registers.PBPC;
++    out[1] = Registers.S.W;
++    out[2] = Registers.D.W;
++    out[3] = Registers.DB;
++    out[4] = Registers.A.W;
++    out[5] = Registers.X.W;
++    out[6] = Registers.Y.W;
++    out[7] = Registers.P.W;
++}
+diff --git a/libretro/link.T b/libretro/link.T
+index 9e82b5d..a630922 100644
+--- a/libretro/link.T
++++ b/libretro/link.T
+@@ -1,4 +1,4 @@
+ {
+-   global: retro_*;
++   global: retro_*; ebh_get_cpu;
+    local: *;
+ };
