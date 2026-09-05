@@ -151,6 +151,8 @@ for step in range(1, A.steps + 1):
         # the round is running: tap A until a command menu is up again
         out = run(f"load {state}\nplayround {A.round_max} {0 if A.no_refill else 1} {1 if A.hold_a else 0}\nrun 40\n{PEEKS}save {nxt}\n", f'{A.tag}_round')
         j = info(peeks(out)); m = re.search(r'playround: (menu after (\d+) frames|TIMEOUT)', out); pr = re.search(r'\((.*)\)', out.split('playround:')[1].splitlines()[0]) if 'playround:' in out else None
+        for l in out.splitlines():
+            if l.startswith('playround: static') or l.startswith('playround: party member'): print("   " + l, flush=True)
         if m and m.group(2):
             rnd += 1
             print(f"step {step}: round {rnd} played in {m.group(2)} frames ({pr.group(1) if pr else ''}) -> phase={j['phase']} group={j['group']} giygasHP={j['hp8']} pokeyHP={j['hp9']} "

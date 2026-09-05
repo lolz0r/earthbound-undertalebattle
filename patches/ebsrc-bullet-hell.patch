@@ -67,10 +67,10 @@ index 37cd3d5e..1b61524f 100644
  # ca65 requires all bin files to be present for generating .dep files, so make sure they're present first
 diff --git a/include/bullet_hell.asm b/include/bullet_hell.asm
 new file mode 100644
-index 00000000..f1c14667
+index 00000000..24d7968c
 --- /dev/null
 +++ b/include/bullet_hell.asm
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,311 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase - shared constants.
 +;
@@ -220,6 +220,7 @@ index 00000000..f1c14667
 +BH_HDMA_WHICH    = $C3   ; byte: which of the two HDMA tables is in use
 +BH_HDMA_TABLE    = $C4   ; 2 x 12 bytes: double-buffered window 2 HDMA tables ($C4, $D0)
 +BH_HDMA_TABLE_B  = $D0
++BH_SLOT_LIMIT    = $DE   ; word: sprite VRAM slots usable by the engine (32, or 16 where BG2 shares the OBJ area)
 +BH_GFX_SLOT      = $DC   ; word: enemy piece slot count when our tiles were uploaded ($FFFF = never)
 +BH_HDMA_CHANNEL  = $80   ; HDMAEN bit for channel 7 (the game uses 0-6: backgrounds, letterbox, swirl and oval windows)
 +
@@ -8259,10 +8260,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..951cdf77
+index 00000000..3b0dc0d5
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,3157 @@
+@@ -0,0 +1,3166 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -9628,7 +9629,16 @@ index 00000000..951cdf77
 +;                   enemy's own bullet sheet after them
 +; ---------------------------------------------------------------------------
 +BH_UPLOAD_TILES:
-+	LDA CURRENT_BATTLE_SPRITEMAPS_ALLOCATED
++	; the prayer phase (group 478) keeps its BG2 tiles at VRAM $3000-$7FFF, on top of
++	; OBJ tiles $100 and up: only the first 16 sprite slots are ours to use there
++	LDA #32
++	STA z:BH_SLOT_LIMIT
++	LDA CURRENT_BATTLE_GROUP
++	CMP #ENEMY_GROUP::BOSS_GIYGAS_PHASE_DURING_PRAYER_1
++	BNE :+
++	LDA #16
++	STA z:BH_SLOT_LIMIT
++:	LDA CURRENT_BATTLE_SPRITEMAPS_ALLOCATED
 +	STA z:BH_GFX_SLOT
 +	STA z:BH_T6             ; first slot for our pieces: right after the enemy sprites
 +	STZ z:BH_T7             ; piece*2
@@ -9637,7 +9647,7 @@ index 00000000..951cdf77
 +	LSR
 +	CLC
 +	ADC z:BH_T6
-+	CMP #32
++	CMP z:BH_SLOT_LIMIT
 +	BCS @no_room            ; sprite-heavy battle: this piece is not available
 +	TAX                     ; slot
 +	LDA z:BH_T7
@@ -9688,7 +9698,7 @@ index 00000000..951cdf77
 +	CMP ENEMIES_IN_BATTLE
 +	BCS @done
 +	LDA z:BH_T6
-+	CMP #32
++	CMP z:BH_SLOT_LIMIT
 +	BCS @done               ; no sprite VRAM left: those enemies use the base bullets
 +	LDX z:BH_T7
 +	LDA ENEMIES_IN_BATTLE_IDS,X
@@ -11437,10 +11447,10 @@ index 00000000..cf0a9927
 +	.BYTE 6	; DODGE THE BULLETS
 diff --git a/src/battle/bullet_hell/bh_minigames.asm b/src/battle/bullet_hell/bh_minigames.asm
 new file mode 100644
-index 00000000..23987633
+index 00000000..21e3f9bf
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_minigames.asm
-@@ -0,0 +1,1737 @@
+@@ -0,0 +1,1739 @@
 +; ---------------------------------------------------------------------------
 +; Extra minigames, picked at random per action. Every graded press floats a
 +; PERFECT / GOOD / OK / MISS label (BH_DRAW_LABEL) with its own sound.
@@ -11480,9 +11490,11 @@ index 00000000..23987633
 +	LDA z:BH_SHEET_END
 +	STA z:BH_T6             ; first slot: right after the enemy sheets
 +	CLC
-+	ADC #BH_HINT_PIECES
-+	CMP #33
++	ADC #BH_HINT_PIECES     ; first slot after the line
++	CMP z:BH_SLOT_LIMIT
++	BEQ :+
 +	BCS @no_room
++:
 +	LDX z:BH_T7
 +	LDA f:BH_HINT_LEN_TABLE,X
 +	AND #$00FF

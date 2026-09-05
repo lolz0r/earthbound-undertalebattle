@@ -496,6 +496,8 @@ int main(int argc, char **argv) {
             unsigned long dp = (unsigned long)sym_addr("BH_DP"), bul = (unsigned long)sym_addr("BH_BULLETS");
             unsigned long focus = (unsigned long)sym_addr("CURRENT_FOCUS_WINDOW"), bt = (unsigned long)sym_addr("BATTLERS_TABLE");
             unsigned long dodged = 0, taps = 0; unsigned dead = 0;
+            /* stall detector: runs of identical frames while the game should be moving */
+            uint32_t prevhash = 0; unsigned long same = 0, still_start = 0; uint32_t still_pc = 0; unsigned still_act = 0, still_mode = 0, still_fs = 0; int nstill = 0;
             for (int k = 0; k < 4; k++) { unsigned long h = bt + 78 * k + 17; if (!(wram[h] | wram[h + 1])) dead |= 1 << k; }
             for (i = 0; i < max; i++) {
                 if (wram[focus] == 0x0F || wram[focus] == 0x12) break;
@@ -511,8 +513,15 @@ int main(int argc, char **argv) {
                 } else if (hold) { held = save | BTN(RETRO_DEVICE_ID_JOYPAD_A); taps++; }   /* a player holding A through everything */
                 else { unsigned long ph = (i + 1) % 30; held = (ph == 0 || ph > 26) ? (save | BTN(RETRO_DEVICE_ID_JOYPAD_A)) : save; if (ph == 0) taps++; }
                 run_frames(1);
+                { uint32_t h = 2166136261u; for (unsigned y = 0; y < fb_h; y += 4) for (unsigned x = 0; x < fb_w; x += 4) { h ^= framebuf[y * 512 + x]; h *= 16777619u; }
+                  if (h == prevhash) { if (++same == 45) { still_start = i - 44; still_act = wram[dp]; still_mode = wram[dp + 0x52]; still_fs = wram[dp + 0x56];
+                          if (ebh_get_cpu_p) { uint32_t r[8]; ebh_get_cpu_p(r); still_pc = r[0]; } } }
+                  else { if (same >= 45 && nstill < 20) { nstill++; printf("playround: static screen for %lu frames from frame %lu (pc=%06X %s, BH_ACTIVE=%u mode=%u fight_state=%u)\n",
+                          same + 1, still_start, still_pc, sym_for(still_pc), still_act, still_mode, still_fs); } same = 0; }
+                  prevhash = h; }
             }
             held = save;
+            if (same >= 45 && nstill < 20) printf("playround: static screen for %lu frames from frame %lu until the end (pc=%06X %s, BH_ACTIVE=%u mode=%u fight_state=%u)\n", same + 1, still_start, still_pc, sym_for(still_pc), still_act, still_mode, still_fs);
             printf("playround: %s after %lu frames (focus=%02X, %lu dodge frames, %lu taps)\n", i < max ? "menu" : "TIMEOUT", i, wram[focus], dodged, taps);
             if (i >= max) rc = 3;
         }

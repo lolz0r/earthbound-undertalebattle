@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `e7dbd181614668716bc6e9c54035fd90a140c3ac` |
+| output: patched ROM | 4,194,304 bytes | `9696e55a5867402b7929510583c54595071bb897` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -162,6 +162,18 @@ then press the right buttons at the right frames (`waitle`/`waitmem`);
   player no hit before frame 60 in 460 phases and a still heart at least 36 frames.
 
 ## Changes
+
+### 2026-09-05
+
+- Giygas's praying-phase background (battle group 478) keeps its BG2 tiles in the
+  upper half of the sprite VRAM, so the engine's tiles there showed as noise lines in the
+  red swirl. The engine now uses only the first 16 sprite slots in that group: seven of
+  the nine pieces fit behind Giygas's nine, the slot machine and the instruction line sit
+  out that phase, and the swirl stays clean.
+- A full playthrough harness for the final battle (`tools/giygas_playthrough.py`, below).
+  The reported lock-ups did not reproduce on snes9x or bsnes-mercury, including from a
+  player's own save; the 1-3 second pauses around the prayers are the game's own fades
+  and scripted waits (vanilla EarthBound shows the same pauses, measured frame by frame).
 
 ### 2026-09-04
 
