@@ -67,10 +67,10 @@ index 37cd3d5e..1b61524f 100644
  # ca65 requires all bin files to be present for generating .dep files, so make sure they're present first
 diff --git a/include/bullet_hell.asm b/include/bullet_hell.asm
 new file mode 100644
-index 00000000..d245a58f
+index 00000000..f1c14667
 --- /dev/null
 +++ b/include/bullet_hell.asm
-@@ -0,0 +1,297 @@
+@@ -0,0 +1,310 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase - shared constants.
 +;
@@ -85,7 +85,7 @@ index 00000000..d245a58f
 +BH_BULLET_SIZE   = 16
 +BH_IFRAME_LEN    = 40          ; invincibility frames after a hit
 +BH_HIT_WINDDOWN  = 24          ; frames the box stays open after the hit that ends the phase
-+BH_BOX_BOTTOM    = 146         ; screen y of the box's bottom edge (just above the HP windows)
++BH_BOX_BOTTOM    = 144         ; screen y of the box's bottom edge (tile-aligned, just above the HP windows)
 +BH_HEART_HALF    = 3           ; half size of the heart's hit box
 +BH_ATTR_BASE     = $3E         ; OAM attribute: priority 3, palette 7
 +BH_OBJ_PALETTE   = $1E0        ; byte offset of OBJ palette 7 inside PALETTES
@@ -162,7 +162,20 @@ index 00000000..d245a58f
 +BH_HINT_TILE     = $B2   ; 3 words: VRAM tiles of the current instruction line's pieces ($FFFF = no room)
 +BH_HINT_LEN      = $B8   ; word: sprites in the current instruction line
 +BH_HINT_PIECES   = 3
-+BH_HINT_SLOTS_AFTER_SHEETS = 4  ; the line goes into the slots after the base pieces and up to four sheets
++BH_SHEET_END     = $BE   ; word: first sprite VRAM slot after the enemy sheets (the hint line goes there)
++BH_SAVED_FOCUS   = $BA   ; word: CURRENT_FOCUS_WINDOW before the box window opened
++BH_WIN_OPEN      = $BC   ; word: 1 while the box is a real game window (else the sprite border is drawn)
++BH_BOX_MAX_W     = 240   ; a game window holds at most 28 interior tiles per row
++BH_BOX_MAX_H     = 88    ; and the box must stay below the battle text window
++BHW_CFG          = 80    ; in BH_BULLETS: 4 words x, y, w, h in tiles, read by CREATE_WINDOW for the borrowed id
++BH_WINDOW_ID     = WINDOW::FILE_SELECT_NAMING_CONFIRMATION_MESSAGE  ; only used on the naming screen
++BH_WINDOW_BLANK  = 64    ; the window system's blank interior tile
++; the frame tiles are opaque and in front of every sprite; BG3 sits one line
++; above the sprite grid, so the visible interior is x0+8..x1-9, y0+7..y1-10
++BH_FRAME_LEFT    = 8
++BH_FRAME_RIGHT   = 8
++BH_FRAME_TOP     = 7
++BH_FRAME_BOTTOM  = 9
 +BHR_D            = 0     ; rhythm: 5 words, distance of each note to its target, 12.4 fixed (negative = past it)
 +BHR_ST           = 16    ; rhythm: 5 words, lane in the high byte, state in the low byte (0 pending, 1-4 graded, 4 also = unused)
 +BHS_SYM          = 32    ; slots: 3 words, symbol shown by each reel (0-3)
@@ -176,7 +189,7 @@ index 00000000..d245a58f
 +BH_COMBO_FRAMES  = 180
 +BH_RHYTHM_BOX_W  = 176
 +BH_RHYTHM_BOX_H  = 88
-+BH_FOCUS_BOX_W   = 144
++BH_FOCUS_BOX_W   = 160
 +BH_FOCUS_BOX_H   = 88
 +BH_FOCUS_START   = 32    ; bracket distance (px) the focus game starts from
 +BH_FOCUS_TARGET  = 8     ; bracket distance (px) that means "in focus"
@@ -199,7 +212,7 @@ index 00000000..d245a58f
 +BH_T5            = $4A
 +BH_T6            = $4C
 +BH_T7            = $4E
-+BH_DP_SIZE       = $A0   ; bytes cleared at battle start
++BH_DP_SIZE       = $C0   ; bytes cleared at battle start (everything below the persistent area)
 +; --- persistent part of the block (not cleared): PPU mirrors and HDMA table ---
 +BH_W12SEL_MIRROR = $C0   ; byte
 +BH_WOBJSEL_MIRROR= $C1   ; byte
@@ -448,6 +461,24 @@ index cc25c03e..2e12b586 100644
  .INCLUDE "config.asm"
  .INCLUDE "eventmacros.asm"
  .INCLUDE "structs.asm"
+diff --git a/src/bankconfig/US/bank01.asm b/src/bankconfig/US/bank01.asm
+index 918d0045..3795039d 100644
+--- a/src/bankconfig/US/bank01.asm
++++ b/src/bankconfig/US/bank01.asm
+@@ -9,6 +9,7 @@
+ .INCLUDE "symbols/bank04.inc.asm"
+ .INCLUDE "symbols/bank2f.inc.asm"
+ .INCLUDE "symbols/globals.inc.asm"
++.INCLUDE "bullet_hell.asm" ; bullet-hell: BHW_CFG
+ .INCLUDE "symbols/misc.inc.asm"
+ .INCLUDE "symbols/text.inc.asm"
+ 
+@@ -844,3 +845,5 @@
+ 
+ SRAM_CHECK_ROUTINE_CHECKSUM_VALUE:
+ 	.WORD $2AD8
++
++.INCLUDE "battle/bullet_hell/bh_window_hook.asm" ; bullet-hell: in the free space at the end of the bank
 diff --git a/src/bankconfig/US/bank02.asm b/src/bankconfig/US/bank02.asm
 index 059a09f5..02d1789d 100644
 --- a/src/bankconfig/US/bank02.asm
@@ -8228,10 +8259,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..97baedff
+index 00000000..951cdf77
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,2873 @@
+@@ -0,0 +1,3157 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -8701,6 +8732,258 @@ index 00000000..97baedff
 +	RTS
 +
 +; ---------------------------------------------------------------------------
++; BH_GAME_WINDOW_OPEN - open the box as one of the game's own windows: the
++;   frame with rounded corners and the interior in the player's text flavour,
++;   sized to the final rectangle BH_TBOX_*. CREATE_WINDOW reads the geometry
++;   from BHW_CFG for the borrowed id. Without a free window slot the sprite
++;   border stays.
++; ---------------------------------------------------------------------------
++BH_GAME_WINDOW_OPEN:
++	STZ z:BH_WIN_OPEN
++	LDA CURRENT_FOCUS_WINDOW
++	STA z:BH_SAVED_FOCUS
++	LDA z:BH_TBOX_X0
++	LSR
++	LSR
++	LSR
++	STA BH_BULLETS + BHW_CFG + 0
++	LDA z:BH_TBOX_Y0
++	LSR
++	LSR
++	LSR
++	STA BH_BULLETS + BHW_CFG + 2
++	LDA z:BH_TBOX_X1
++	SEC
++	SBC z:BH_TBOX_X0
++	LSR
++	LSR
++	LSR
++	STA BH_BULLETS + BHW_CFG + 4
++	LDA z:BH_TBOX_Y1
++	SEC
++	SBC z:BH_TBOX_Y0
++	LSR
++	LSR
++	LSR
++	STA BH_BULLETS + BHW_CFG + 6
++	LDA #BH_WINDOW_ID
++	BH_CALL_C REDIRECT_CREATE_WINDOW
++	REP #PROC_FLAGS::ACCUM8 | PROC_FLAGS::INDEX8
++	LDA z:BH_SAVED_FOCUS
++	STA CURRENT_FOCUS_WINDOW  ; text keeps going to the window it went to before
++	LDA OPEN_WINDOW_TABLE + BH_WINDOW_ID * 2
++	CMP #$FFFF
++	BEQ @none
++	LDA #1
++	STA z:BH_WIN_OPEN
++	; The window drawer adds $2000 (priority bit) to every interior tile, and
++	; high-priority BG3 covers all sprites. Interior words of $E040 wrap to
++	; $0040 in that add: the blank flavour tile at low priority, which shows
++	; through the masked background and sits under the heart and bullets.
++	LDA #$E000 + BH_WINDOW_BLANK
++	JSR BH_GAME_WINDOW_FILL
++@none:
++	RTS
++
++BH_GAME_WINDOW_CLOSE:
++	LDA z:BH_WIN_OPEN
++	BEQ @done
++	STZ z:BH_WIN_OPEN
++	LDA #BH_WINDOW_BLANK    ; plain blanks again: CLOSE_WINDOW frees any other tile
++	JSR BH_GAME_WINDOW_FILL
++	LDA CURRENT_FOCUS_WINDOW
++	STA z:BH_SAVED_FOCUS
++	LDA #BH_WINDOW_ID
++	BH_CALL_C CLOSE_WINDOW
++	REP #PROC_FLAGS::ACCUM8 | PROC_FLAGS::INDEX8
++	LDA z:BH_SAVED_FOCUS
++	STA CURRENT_FOCUS_WINDOW
++@done:
++	RTS
++
++; A = word written to every interior tile of the box window's tile buffer
++;   (the full-size interior: the window is created at BH_TBOX_* size)
++BH_GAME_WINDOW_FILL:
++	STA z:BH_T2
++	LDA z:BH_TBOX_X1
++	SEC
++	SBC z:BH_TBOX_X0
++	LSR
++	LSR
++	LSR
++	DEC
++	DEC
++	TAY                     ; interior columns
++	LDA z:BH_TBOX_Y1
++	SEC
++	SBC z:BH_TBOX_Y0
++	LSR
++	LSR
++	LSR
++	DEC
++	DEC                     ; interior rows
++	JSL MULT16
++	STA z:BH_T0             ; interior tiles (boxes are at least 3x3 tiles)
++	LDA OPEN_WINDOW_TABLE + BH_WINDOW_ID * 2
++	LDY #.SIZEOF(window_stats)
++	JSL MULT168
++	TAX
++	LDA WINDOW_STATS + window_stats::tilemap_address,X
++	TAX
++	LDA z:BH_T2
++@fill:
++	STA a:0,X
++	INX
++	INX
++	DEC z:BH_T0
++	BNE @fill
++	RTS
++
++; ---------------------------------------------------------------------------
++; BH_GAME_WINDOW_FIT - the box window follows BH_BOX_*: the rectangle is
++;   rounded outward to whole tiles (at least the 2x2 frame) and BH_BOX_* is
++;   aligned to it so the background mask matches the frame, the window's
++;   position and size are rewritten and every window is redrawn on the next
++;   tick. Nothing happens while the sprite outline is in use.
++; ---------------------------------------------------------------------------
++BH_GAME_WINDOW_FIT:
++	LDA z:BH_WIN_OPEN
++	BNE :+
++	RTS
++:	JSR BH_GAME_WINDOW_ERASE
++	LDA z:BH_BOX_X0
++	AND #$FFF8
++	STA z:BH_BOX_X0
++	LDA z:BH_BOX_X1
++	CLC
++	ADC #7
++	AND #$FFF8
++	SEC
++	SBC z:BH_BOX_X0
++	CMP #16
++	BCS :+
++	LDA #16
++:	STA z:BH_T0             ; width in px
++	CLC
++	ADC z:BH_BOX_X0
++	STA z:BH_BOX_X1
++	LDA z:BH_BOX_Y0
++	AND #$FFF8
++	STA z:BH_BOX_Y0
++	LDA z:BH_BOX_Y1
++	CLC
++	ADC #7
++	AND #$FFF8
++	SEC
++	SBC z:BH_BOX_Y0
++	CMP #16
++	BCS :+
++	LDA #16
++:	STA z:BH_T1             ; height in px
++	CLC
++	ADC z:BH_BOX_Y0
++	STA z:BH_BOX_Y1
++	LDA OPEN_WINDOW_TABLE + BH_WINDOW_ID * 2
++	LDY #.SIZEOF(window_stats)
++	JSL MULT168
++	TAX
++	LDA z:BH_BOX_X0
++	LSR
++	LSR
++	LSR
++	STA WINDOW_STATS + window_stats::window_x,X
++	LDA z:BH_BOX_Y0
++	LSR
++	LSR
++	LSR
++	STA WINDOW_STATS + window_stats::window_y,X
++	LDA z:BH_T0
++	LSR
++	LSR
++	LSR
++	DEC
++	DEC
++	STA WINDOW_STATS + window_stats::width,X
++	LDA z:BH_T1
++	LSR
++	LSR
++	LSR
++	DEC
++	DEC
++	STA WINDOW_STATS + window_stats::height,X
++	; draw the window and queue the tilemap upload now: the tick skips both
++	; while a held button makes text print instantly, and the frame must reach
++	; the screen together with the mask table (redrawing every window would
++	; render the HP meters too, which costs a whole frame)
++	LDA OPEN_WINDOW_TABLE + BH_WINDOW_ID * 2
++	BH_CALL_C UNKNOWN_C107AF
++	BH_CALL_C UNKNOWN_C2038B
++	REP #PROC_FLAGS::ACCUM8 | PROC_FLAGS::INDEX8
++	RTS
++
++; blank the final box area in the tilemap so a shrinking frame leaves nothing behind
++BH_GAME_WINDOW_ERASE:
++	LDA z:BH_TBOX_X1
++	SEC
++	SBC z:BH_TBOX_X0
++	LSR
++	LSR
++	LSR
++	STA z:BH_T0             ; columns
++	ASL
++	STA z:BH_T2
++	LDA #64
++	SEC
++	SBC z:BH_T2
++	STA z:BH_T2             ; bytes from the end of a row to the start of the next
++	LDA z:BH_TBOX_Y1
++	SEC
++	SBC z:BH_TBOX_Y0
++	LSR
++	LSR
++	LSR
++	STA z:BH_T1             ; rows
++	LDA z:BH_TBOX_Y0
++	LSR
++	LSR
++	LSR
++	XBA                     ; * 256
++	LSR
++	LSR                     ; * 64 bytes per tilemap row
++	STA z:BH_T3
++	LDA z:BH_TBOX_X0
++	LSR
++	LSR                     ; * 2 bytes per tile
++	AND #$FFFE
++	CLC
++	ADC z:BH_T3
++	CLC
++	ADC #.LOWORD(BG2_BUFFER)
++	TAX
++@row:
++	LDY z:BH_T0
++@col:
++	STZ a:0,X
++	INX
++	INX
++	DEY
++	BNE @col
++	TXA
++	CLC
++	ADC z:BH_T2
++	TAX
++	DEC z:BH_T1
++	BNE @row
++	RTS
++
++; the sprite outline only while the box is not a game window
++BH_DRAW_BORDER_IF_NEEDED:
++	LDA z:BH_WIN_OPEN
++	BNE :+
++	JMP BH_DRAW_BORDER
++:	RTS
++
++; ---------------------------------------------------------------------------
 +; BH_WINDOW_ON - black out the box interior: window 2 masks BG1/BG2 inside the
 +; box, with WH2/WH3 driven per scanline by HDMA channel 7. The game's own
 +; window settings (letterbox bars on window 1) are kept.
@@ -8894,12 +9177,30 @@ index 00000000..97baedff
 +;              its bottom edge fixed; heart placed in the middle
 +; ---------------------------------------------------------------------------
 +BH_SET_BOX:
++	; whole tiles only: the box is one of the game's windows
++	LDA z:BH_T0
++	CLC
++	ADC #7
++	AND #$FFF8
++	CMP #BH_BOX_MAX_W + 1
++	BCC :+
++	LDA #BH_BOX_MAX_W
++:	STA z:BH_T0
++	LDA z:BH_T1
++	CLC
++	ADC #7
++	AND #$FFF8
++	CMP #BH_BOX_MAX_H + 1
++	BCC :+
++	LDA #BH_BOX_MAX_H
++:	STA z:BH_T1
 +	LDA z:BH_T0
 +	LSR
 +	STA z:BH_T2
 +	LDA #128
 +	SEC
 +	SBC z:BH_T2
++	AND #$FFF8
 +	STA z:BH_BOX_X0
 +	CLC
 +	ADC z:BH_T0
@@ -9091,12 +9392,14 @@ index 00000000..97baedff
 +	STA z:BH_BOX_Y1
 +	JSR BH_WINDOW_ON        ; table for the point (masks nothing)
 +	JSR BH_WINDOW_ENABLE
++	JSR BH_GAME_WINDOW_OPEN ; the game's own frame, which follows the growing box
 +	LDA #1
 +	STA z:BH_ANIM
 +	STA z:BH_ACTIVE
 +@step:
++	JSR BH_GAME_WINDOW_FIT  ; the frame for the current rectangle, and
 +	LDA z:BH_ANIM
-+	JSR BH_BOX_ANIM_STEP
++	JSR BH_BOX_ANIM_STEP    ; its mask, then the next rectangle
 +	JSR BH_TICK
 +	JSR BH_RAMP_SHIFT
 +	INC z:BH_ANIM
@@ -9104,6 +9407,7 @@ index 00000000..97baedff
 +	CMP #BH_BOX_ANIM_FRAMES + 1
 +	BCC @step
 +	; one more frame so the window table shows the final rectangle
++	JSR BH_GAME_WINDOW_FIT
 +	JSR BH_BOX_PIPE
 +	JSR BH_TICK
 +	JSR BH_RAMP_SHIFT
@@ -9116,6 +9420,7 @@ index 00000000..97baedff
 +@step:
 +	DEC z:BH_ANIM
 +	BEQ @done
++	JSR BH_GAME_WINDOW_FIT
 +	LDA z:BH_ANIM
 +	JSR BH_BOX_ANIM_STEP
 +	JSR BH_TICK
@@ -9125,6 +9430,7 @@ index 00000000..97baedff
 +	; show the smallest rectangle, then shrink to a point
 +	LDA #1
 +	STA z:BH_ANIM
++	JSR BH_GAME_WINDOW_FIT
 +	JSR BH_BOX_PIPE
 +	JSR BH_TICK
 +	JSR BH_RAMP_SHIFT
@@ -9140,12 +9446,14 @@ index 00000000..97baedff
 +	LSR
 +	STA z:BH_BOX_Y0
 +	STA z:BH_BOX_Y1
++	JSR BH_GAME_WINDOW_FIT
 +	JSR BH_BOX_PIPE
 +	JSR BH_TICK
 +	JSR BH_RAMP_SHIFT
 +	STZ z:BH_ACTIVE
 +	STZ z:BH_ANIM
 +	JSR BH_WINDOW_OFF
++	JSR BH_GAME_WINDOW_CLOSE
 +	; restore the full rectangle (BH_BOX_* are also used by BH_CALC_YSHIFT)
 +	LDA z:BH_TBOX_X0
 +	STA z:BH_BOX_X0
@@ -9431,6 +9739,8 @@ index 00000000..97baedff
 +	CMP #8
 +	BCC @each
 +@done:
++	LDA z:BH_T6
++	STA z:BH_SHEET_END      ; the instruction lines go right after the sheets
 +	RTS
 +
 +; ---------------------------------------------------------------------------
@@ -9567,31 +9877,36 @@ index 00000000..97baedff
 +	LDA #1
 +	STA z:BH_MOVED
 +@still:
-+	; keep the heart inside the box (the art occupies columns 2-13, rows 2-12)
-+	LDA z:BH_HEART_X
-+	CMP z:BH_BOX_X0
-+	BCS @xmin_ok
++	; keep the heart inside the window frame (the art occupies columns 2-13,
++	; rows 2-12; the frame tiles cover 8 px on each side, see BH_FRAME_*)
 +	LDA z:BH_BOX_X0
++	CLC
++	ADC #BH_FRAME_LEFT - 2
++	CMP z:BH_HEART_X
++	BCS @xmin_ok            ; the limit is at or right of the heart: use it
++	LDA z:BH_HEART_X
 +@xmin_ok:
 +	STA z:BH_T1
 +	LDA z:BH_BOX_X1
 +	SEC
-+	SBC #16
++	SBC #BH_FRAME_RIGHT + 14
 +	CMP z:BH_T1
 +	BCS @xmax_ok
 +	STA z:BH_T1
 +@xmax_ok:
 +	LDA z:BH_T1
 +	STA z:BH_HEART_X
-+	LDA z:BH_HEART_Y
-+	CMP z:BH_BOX_Y0
-+	BCS @ymin_ok
 +	LDA z:BH_BOX_Y0
++	CLC
++	ADC #BH_FRAME_TOP - 2
++	CMP z:BH_HEART_Y
++	BCS @ymin_ok
++	LDA z:BH_HEART_Y
 +@ymin_ok:
 +	STA z:BH_T1
 +	LDA z:BH_BOX_Y1
 +	SEC
-+	SBC #15
++	SBC #BH_FRAME_BOTTOM + 13
 +	CMP z:BH_T1
 +	BCS @ymax_ok
 +	STA z:BH_T1
@@ -10733,7 +11048,7 @@ index 00000000..97baedff
 +	BEQL @done
 +	LDA z:BH_ANIM
 +	BEQ @content
-+	JSR BH_DRAW_BORDER      ; opening/closing: border only
++	JSR BH_DRAW_BORDER_IF_NEEDED ; opening/closing: the outline only (no game window)
 +	JMP @done
 +@content:
 +	LDA z:BH_MODE
@@ -10742,7 +11057,7 @@ index 00000000..97baedff
 +	TAX
 +	JSR (.LOWORD(BH_RENDER_TABLE),X)   ; gauge, rhythm, focus, mash, slots, combo
 +	JSR BH_DRAW_HINT
-+	JSR BH_DRAW_BORDER
++	JSR BH_DRAW_BORDER_IF_NEEDED
 +	JMP @done
 +@dodge:
 +	; heart (blinks while invincible)
@@ -10795,7 +11110,7 @@ index 00000000..97baedff
 +	CPX #BH_MAX_BULLETS * BH_BULLET_SIZE
 +	BCC @bullet
 +	JSR BH_DRAW_HINT
-+	JSR BH_DRAW_BORDER
++	JSR BH_DRAW_BORDER_IF_NEEDED
 +@done:
 +	BH_LEAVE
 +
@@ -11122,10 +11437,10 @@ index 00000000..cf0a9927
 +	.BYTE 6	; DODGE THE BULLETS
 diff --git a/src/battle/bullet_hell/bh_minigames.asm b/src/battle/bullet_hell/bh_minigames.asm
 new file mode 100644
-index 00000000..4b14a0da
+index 00000000..23987633
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_minigames.asm
-@@ -0,0 +1,1734 @@
+@@ -0,0 +1,1737 @@
 +; ---------------------------------------------------------------------------
 +; Extra minigames, picked at random per action. Every graded press floats a
 +; PERFECT / GOOD / OK / MISS label (BH_DRAW_LABEL) with its own sound.
@@ -11162,10 +11477,8 @@ index 00000000..4b14a0da
 +; A = instruction index -> its three pieces in VRAM (BH_HINT_TILE), sprite count in BH_HINT_LEN
 +BH_UPLOAD_HINT:
 +	STA z:BH_T7
-+	LDA z:BH_GFX_SLOT
-+	CLC
-+	ADC #BH_NUM_PIECES + BH_HINT_SLOTS_AFTER_SHEETS
-+	STA z:BH_T6             ; first slot
++	LDA z:BH_SHEET_END
++	STA z:BH_T6             ; first slot: right after the enemy sheets
 +	CLC
 +	ADC #BH_HINT_PIECES
 +	CMP #33
@@ -11219,7 +11532,7 @@ index 00000000..4b14a0da
 +	JSL MULT168
 +	STA z:BH_T5             ; line width
 +	CLC
-+	ADC #8
++	ADC #BH_FRAME_LEFT + BH_FRAME_RIGHT + 4
 +	STA z:BH_T6
 +	LDA z:BH_BOX_X1
 +	SEC
@@ -11238,8 +11551,8 @@ index 00000000..4b14a0da
 +	STA z:BH_T5             ; x
 +	LDA z:BH_BOX_Y1
 +	SEC
-+	SBC #15
-+	STA z:BH_T6             ; y
++	SBC #BH_FRAME_BOTTOM + 13
++	STA z:BH_T6             ; y: the letters (sprite rows 5-10) end above the frame
 +	STZ z:BH_T7             ; sprite index
 +@sprite:
 +	LDA z:BH_T7
@@ -11909,10 +12222,11 @@ index 00000000..4b14a0da
 +	CLC
 +	ADC z:BH_BOX_X0
 +	CLC
-+	ADC #4
++	ADC #8
 +	STA z:BH_T0
 +	LDA z:BH_BOX_Y0
-+	INC
++	CLC
++	ADC #BH_FRAME_TOP + 1
 +	STA z:BH_T1
 +	JSR BH_OAM_PUT
 +	LDX z:BH_T6
@@ -12042,6 +12356,10 @@ index 00000000..4b14a0da
 +; ---------------------------------------------------------------------------
 +BH_RENDER_FOCUS:
 +	JSR BH_MG_CENTRE
++	LDA z:BH_LOOP_CNT
++	SEC
++	SBC #4                  ; a little high, so the widest brackets clear the hint line
++	STA z:BH_LOOP_CNT
 +	; the target: heart (block) or crosshair (attack); a spark once a perfect press landed
 +	LDA z:BH_FIGHT_STATE
 +	BEQ @target
@@ -12396,9 +12714,9 @@ index 00000000..4b14a0da
 +BH_SLOTS_PHASE:
 +	LDA #4
 +	STA z:BH_HINT_LEN
-+	LDA #144
++	LDA #160
 +	STA z:BH_T0
-+	LDA #80
++	LDA #88
 +	STA z:BH_T1
 +	LDA #5
 +	JSR BH_MG_START_NOOPEN
@@ -12625,7 +12943,7 @@ index 00000000..4b14a0da
 +	STA z:BH_HINT_LEN
 +	LDA #160
 +	STA z:BH_T0
-+	LDA #72
++	LDA #80
 +	STA z:BH_T1
 +	LDA #6
 +	JSR BH_MG_START_NOOPEN
@@ -12860,6 +13178,26 @@ index 00000000..4b14a0da
 +	ADC #48
 +	STA z:BH_T1
 +	JMP BH_MG_FLOAT_LABEL
+diff --git a/src/battle/bullet_hell/bh_window_hook.asm b/src/battle/bullet_hell/bh_window_hook.asm
+new file mode 100644
+index 00000000..d88dec69
+--- /dev/null
++++ b/src/battle/bullet_hell/bh_window_hook.asm
+@@ -0,0 +1,14 @@
++; ---------------------------------------------------------------------------
++; BH_WINDOW_CONFIG_PTR - called by CREATE_WINDOW in place of its
++;   LOADPTR WINDOW_CONFIGURATION_TABLE, @VIRTUAL06 (Y = window id, D = its
++;   stack frame, so the pointer goes to $06). The dodge box borrows window id
++;   $24 (the naming-screen confirmation, never open in battle) and its
++;   geometry lives in RAM at BH_BULLETS + BHW_CFG. Sits at the end of bank $C1
++;   so the rest of the bank keeps its original layout.
++; ---------------------------------------------------------------------------
++BH_WINDOW_CONFIG_PTR:
++	LOADPTR WINDOW_CONFIGURATION_TABLE, $06
++	CPY #WINDOW::FILE_SELECT_NAMING_CONFIRMATION_MESSAGE
++	BNE :+
++	LOADPTR BH_BULLETS + BHW_CFG - WINDOW::FILE_SELECT_NAMING_CONFIRMATION_MESSAGE * 8, $06
++:	RTS
 diff --git a/src/battle/calc_damage.asm b/src/battle/calc_damage.asm
 index ef0b95da..98172ec4 100644
 --- a/src/battle/calc_damage.asm
@@ -13076,6 +13414,22 @@ index 688065c3..6d627483 100644
  	STA f:TSW
  	REP #PROC_FLAGS::ACCUM8
  	LDA #$5555
+diff --git a/src/text/create_window.asm b/src/text/create_window.asm
+index eff212cb..1b3345e9 100644
+--- a/src/text/create_window.asm
++++ b/src/text/create_window.asm
+@@ -123,7 +123,10 @@ CREATE_WINDOW:
+ 	TAX
+ 	LDA @LOCAL00
+ 	STA OPEN_WINDOW_TABLE,X
+-	LOADPTR WINDOW_CONFIGURATION_TABLE, @VIRTUAL06
++	JSR BH_WINDOW_CONFIG_PTR ; bullet-hell: the dodge box's window reads its geometry from RAM
++	.REPEAT 7                ; (same 10 bytes as the LOADPTR this replaces, so the bank keeps its layout)
++	NOP
++	.ENDREPEAT
+ 	TYA
+ 	ASL
+ 	ASL
 diff --git a/src/unknown/C2/C2C21F.asm b/src/unknown/C2/C2C21F.asm
 index d6309666..65c22aa9 100644
 --- a/src/unknown/C2/C2C21F.asm

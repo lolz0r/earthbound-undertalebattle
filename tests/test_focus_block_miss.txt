@@ -10,7 +10,7 @@ poke BATTLE_MODE FF FF
 waitmem BATTLE_MODE_FLAG 1 900
 poke BH_DP+0x9C 04
 spam a 40 2400 BH_DP 1
-waitle BH_DP+0x3C 0 600
+waitmem BH_DP+0x0A 1 600
 run 8
 shot fbm_passed
 peek BH_DP+0x36 2

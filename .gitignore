@@ -3,6 +3,8 @@
 *.smc
 *.srm
 *.st
+*.oops
+*.ram
 tests/out/
 # third-party toolchain clones / binaries (see README for how to rebuild)
 tools/cc65/

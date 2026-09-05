@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `999ae62e062583b25271da6a87adba66b97f0b49` |
+| output: patched ROM | 4,194,304 bytes | `e7dbd181614668716bc6e9c54035fd90a140c3ac` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -99,6 +99,11 @@ game uploads its own line into three spare sprite slots when it starts. Every gr
 press floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade
 is never in doubt, and a game you never press a button in says MISS and whiffs.
 
+Every box is one of the game's own text windows: the same rounded frame and interior
+as the battle text and HP windows, in whatever flavour the player picked (Plain, Mint,
+Strawberry, Banana, Peanut). It grows out of its centre and shrinks back over eight
+frames like before, as a real window at every step.
+
 - **Timing gauge** (as before): press A while the bouncing reticle is in the green
   for a SMAAAASH; yellow always connects, red misses 70 % of the time.
 - **Rhythm** (3-5 seconds): the A, B, X and Y buttons sit in the middle of the box
@@ -160,6 +165,11 @@ then press the right buttons at the right frames (`waitle`/`waitmem`);
 
 ### 2026-09-04
 
+- The dodge box and every minigame box are now real game windows: rounded corners and
+  the player's text-window flavour instead of a white sprite outline. The box borrows
+  the naming-screen confirmation window id and reads its geometry from RAM; its
+  interior tiles are drawn at low BG3 priority so the heart, bullets and labels stay
+  in front of the interior while the frame stays in front of them.
 - Five new minigames, picked at random: a rhythm game with the SNES buttons in the middle
   of the box, a focus/timed-block game for attacks and enemy attacks, a mash bar, a slot
   machine and a button combo (above), with PERFECT / GOOD / OK / MISS labels and sounds on
@@ -208,7 +218,7 @@ tests/                    harness scripts (*.txt), run.sh, captured screenshots 
 ## Building from source
 
 The engine lives in `patches/ebsrc-bullet-hell.patch`, a diff against ebsrc commit
-`0197d6c13ef11ad3280e9388e08a646ab1030d15` (35 source files: the engine, its include
+`0197d6c13ef11ad3280e9388e08a646ab1030d15` (38 source files: the engine, its include
 files, the bank configuration and the hooks in the game's battle code). Everything under
 ebsrc's `src/bin/` is generated, either extracted from your ROM by ebbinex or written by
 the generators in `tools/`, so none of it is in git.
@@ -309,7 +319,8 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   applies. Game routines called from inside engine loops (sound, text) may clobber X;
   the engine saves it around them.
 * `BH_RENDER` in the battle frame renderer (`C2F8F9`) appends the heart, bullets, gauge
-  and box border to OAM after the enemy sprites. Enemy sprites are drawn shifted up by
+  and labels to OAM after the enemy sprites (and a sprite outline for the box only when
+  no window slot was free). Enemy sprites are drawn shifted up by
   `BH_YSHIFT` (patched into `render_battle_sprite_row.asm`): just above the gauge for
   party attacks, off the top of the screen for dodge phases (`BH_CALC_YSHIFT` mode).
 * `BH_SMASH_OVERRIDE` at the top of the game's SMAAAASH check forces or forbids the
@@ -317,10 +328,21 @@ A forced encounter is just five pokes: `CURRENT_BATTLE_GROUP`, `ENEMIES_IN_BATTL
   `MISS_CALC` and `DETERMINE_DODGE` forces the outcome of the hit/miss rolls (always hit
   after a dodge-phase hit or a yellow/green press, always miss for a whiff or a red
   press that rolled a miss).
-* The black interior is hardware window 2 masking BG1/BG2, with its left/right edges
-  driven per scanline by HDMA channel 6 (channels 0-3 belong to the battle backgrounds,
-  4 to the letterbox, 5 to the swirl). The game's window registers are mirrored so they
-  can be restored afterwards.
+* The box is a game window: `CREATE_WINDOW` reads the geometry of window id `$24` (the
+  naming-screen confirmation, never open in battle) from `BH_BULLETS + 80` instead of the
+  ROM table, and the engine opens it at the box rectangle, rounded to whole tiles. The
+  window drawer adds the BG3 priority bit to every interior tile, and high-priority BG3
+  covers all sprites, so the engine writes `$E040` into the window's tile buffer: the
+  add wraps to `$0040`, the blank flavour tile at low priority, under the heart and
+  bullets, while the frame tiles stay in front of them. While the box grows or shrinks
+  the window's position and size are rewritten each frame (`BH_GAME_WINDOW_FIT`), the
+  window is redrawn and its tilemap upload queued directly, since `WINDOW_TICK` skips
+  both while a held button makes text print instantly. The heart and the labels keep
+  clear of the eight-pixel frame tiles (`BH_FRAME_*`).
+* The interior behind the low-priority tiles is hardware window 2 masking BG1/BG2, with
+  its left/right edges driven per scanline by HDMA channel 7 (channels 0-3 belong to
+  the battle backgrounds, 4 to the letterbox, 5 and 6 to the swirl and oval effects).
+  The game's window registers are mirrored so they can be restored afterwards.
 * Sprite tiles are uploaded once per battle, right after the enemy sprites are loaded
   (screen still blanked), into the first unused 32x32 enemy-sprite "piece" slots of OBJ
   VRAM: five base pieces, then one sheet per enemy kind present (up to four). They are
@@ -336,9 +358,9 @@ per phase: rewriting WH2/WH3 mid-frame blanks the mask until the next HDMA entry
 editing the live table tears.
 
 One SNES gotcha worth knowing: when more than 34 8-pixel sprite slivers share a scanline
-the PPU drops the *highest priority* sprites first, so the box border uses 16x16 side
-pieces, the heart/cursor are always written to OAM first, and wall rows are spaced so a
-full-width row stays under the limit.
+the PPU drops the *highest priority* sprites first, so the fallback sprite outline uses
+16x16 side pieces, the heart/cursor are always written to OAM first, and wall rows are
+spaced so a full-width row stays under the limit.
 
 Per-frame cost: each bullet's tile, palette attribute and hit box are resolved once when
 it spawns (`BH_SET_TYPE`), so the update and render loops only add, compare and copy.

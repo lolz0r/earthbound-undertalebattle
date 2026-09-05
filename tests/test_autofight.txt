@@ -17,7 +17,8 @@ press a 4
 run 60
 shot af_after
 peek GAME_STATE+188 1
-waitmem BH_DP 1 1500
+run 1500
+peek BH_DP 2
 peek BATTLE_MODE_FLAG 1
 peek BATTLERS_TABLE+641 2
 shot af_end
