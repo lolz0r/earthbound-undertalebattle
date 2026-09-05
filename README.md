@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `9696e55a5867402b7929510583c54595071bb897` |
+| output: patched ROM | 4,194,304 bytes | `30dd117bed8c47cd72aed0e85928df344e12886e` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -97,7 +97,10 @@ instruction along its bottom edge, in the same sprite font as the grade labels
 lines are pre-rendered by `tools/gen_bh_gfx.py` (`bh_hints.bin`, bank $F0) and a
 game uploads its own line into three spare sprite slots when it starts. Every graded
 press floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade
-is never in doubt, and a game you never press a button in says MISS and whiffs.
+is never in doubt, and a game you never press a button in says MISS and whiffs. Every
+press is also shown where it lands: a white ring lights the pressed lane button, the
+gauge cursor, the focus target, the mash prompt or the combo step for ten frames and the
+icon pops up for the first five; a stopped slot reel gets the same ring.
 
 Every box is one of the game's own text windows: the same rounded frame and interior
 as the battle text and HP windows, in whatever flavour the player picked (Plain, Mint,
@@ -165,6 +168,9 @@ then press the right buttons at the right frames (`waitle`/`waitmem`);
 
 ### 2026-09-05
 
+- Press feedback in every minigame: the icon the press lands on (lane button, gauge
+  cursor, focus target, mash prompt, combo step, stopped reel) is ringed in white and
+  pops up. One shared tracker (`BH_MG_PRESS`) remembers the last face button pressed.
 - Giygas's praying-phase background (battle group 478) keeps its BG2 tiles in the
   upper half of the sprite VRAM, so the engine's tiles there showed as noise lines in the
   red swirl. The engine now uses only the first 16 sprite slots in that group: seven of

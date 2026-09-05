@@ -408,11 +408,19 @@ def piece_sheet(sprites):
         blit(p, s, (i % 2) * 16, (i // 2) * 16)
     return p
 
+RING = blank(16, 16)              # press highlight: a 2 px white ring the size of a button icon
+for y in range(16):
+    for x in range(16):
+        r2 = (x - 7.5) ** 2 + (y - 7.5) ** 2
+        if 5.6 ** 2 <= r2 <= 7.9 ** 2:
+            RING[y][x] = WHITE
+
 def piece_hline():
     p = blank()
     for y in (0, 1):
         for x in range(32):
             p[y][x] = WHITE
+    blit(p, RING, 0, 16)           # sprite offset 32 of piece 1
     return p
 
 def vline16():
