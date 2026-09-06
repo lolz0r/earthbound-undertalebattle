@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `b45e2f7bfce5a2072bf82c3aeeb387f868944640` |
+| output: patched ROM | 4,194,304 bytes | `23f1e2a35ad6ee6aeb6191b00569043cd46ca798` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -65,17 +65,23 @@ short invincibility flash.
   (SEEK) or accelerate downwards (DROP). The generator guarantees that no two programs
   share the same bytes or the same opcode sequence. Bullet speed also scales with the
   enemy's level.
-* **White shapes for bullets.** Bullets are plain monochrome shapes in the Undertale
-  manner: stars, rings, discs, diamonds, crosses, lines, squares, chevrons, crescents,
-  asterisks, bow ties, dot trails and waves (`tools/gen_bh_enemy_gfx.py`). Every enemy
-  still has its own sheet of four 16x16 shapes, picked from that library so that
-  enemies differ from one another, and the 171 enemies whose battle sprite is bigger
-  than 32 px keep one 32x32 shape drawn with the hardware's 32x32 sprite size and
+* **White shapes for bullets, in the enemy's theme.** Bullets are monochrome shapes
+  in the Undertale manner, and each enemy throws the ones that suit it: crows throw
+  feathers, beaks, eggs and wings; dogs bones, paws, fangs and footprints; snakes
+  waves and scales; UFOs saucers, planets and comets; robots gears, bolts, nuts and
+  lightning; Starmen stars and laser bars; ghosts wisps, skulls and hands; zombies
+  bones and tombstones; cultists pentagrams and eyes; cops badges and shields; punks
+  skateboards and shards; piles of puke drips, splats and bubbles; Giygas hands,
+  spirals and wisps... `tools/gen_bh_enemy_gfx.py` holds a library of about 150
+  shapes and 80 themes matched by enemy name (with the game's insect/metal type as
+  the fallback). Every enemy gets its own sheet of four 16x16 shapes drawn from its
+  theme, so two dogs still differ, and the 171 enemies whose battle sprite is bigger
+  than 32 px get one 32x32 shape drawn with the hardware's 32x32 sprite size and
   mirrored for the odd bullet types (the size classes drive the spacing of the
-  generated attack programs). The sheets of the enemies present are uploaded to sprite
-  VRAM at the start of each battle and drawn in white with the engine's own palette.
-  Earlier versions cut the bullets out of each enemy's own battle sprite; the shapes
-  read better at bullet size.
+  generated attack programs). The sheets of the enemies present are uploaded to
+  sprite VRAM at the start of each battle and drawn in white with the engine's own
+  palette. Earlier versions cut the bullets out of each enemy's own battle sprite;
+  the shapes read better at bullet size.
 
 **Party attacks.** When Ness, Paula, Jeff or Poo perform a physical attack ("Bash",
 "Shoot"...), the box shows a red/yellow/green gauge with a reticle that sweeps right,
@@ -222,6 +228,14 @@ modifier (`test_ag_option*.txt` check the option itself).
 
 ## Changes
 
+### 2026-09-06
+
+- Bullet shapes follow the enemy's theme: a library of about 150 white shapes and 80
+  themes (crows throw feathers and beaks, dogs bones and paws, robots gears and
+  bolts, ghosts wisps and skulls, cops badges, punks skateboards...), matched by
+  enemy name. `python3 tools/gen_bh_enemy_gfx.py ebsrc --list` prints every enemy's
+  theme and shapes.
+
 ### 2026-09-05
 
 - Bullets are white shapes (stars, rings, diamonds, crosses, lines...) instead of
@@ -295,7 +309,7 @@ tools/                    toolchain, all built in user space
   harness/ebharness.c     scripted headless test runner (screenshots, RAM peek/poke,
                           save states, symbol names from the ld65 map)
   gen_bh_gfx.py           base tiles (heart, box lines, gauge, bones) from ASCII art
-  gen_bh_enemy_gfx.py     writes every enemy's sheet of white bullet shapes (and its hit boxes)
+  gen_bh_enemy_gfx.py     the shape library and themes; writes every enemy's bullet sheet and hit boxes
   gen_bh_enemies.py       writes the per-enemy records and attack programs
   gen_bh_attack_games.py  writes the per-attack game table from docs/attack_minigames.md
   make_ips.py             builds the IPS patch from the original and the built ROM
