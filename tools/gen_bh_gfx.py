@@ -491,7 +491,7 @@ HINTS = [
     "SLIP THROUGH THE GAPS",       # 8  B4 sweeps
     "HOLD A RELEASE IN GREEN",     # 9  B5 hold and release
     "PRESS THE ARROWS IN ORDER",   # 10 B6 arrow chain
-    "CATCH GREEN AVOID RED",       # 11 B10 catch and avoid
+    "CATCH GREEN DODGE WHITE",       # 11 B10 catch and avoid
     "WIGGLE LEFT RIGHT FAST",      # 12 B12 wiggle
     "PRESS A WHEN IT CROSSES",     # 13 B13 counter shot
     "PRESS A ON THE BEAT",         # 14 B14 beat

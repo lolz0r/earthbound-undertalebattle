@@ -12,13 +12,13 @@ disassembly itself is not included, see "Building from source".
 
 ## Playing it: applying the patch
 
-`EarthBound - Bullet Hell.ips` (about 320 KB) turns a clean EarthBound (USA) ROM into the
+`EarthBound - Bullet Hell.ips` (about 280 KB) turns a clean EarthBound (USA) ROM into the
 hacked one. No ROM is distributed here; you need your own copy.
 
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `c394d90affc7b0c3347c9bb25b89807b4449ea3b` |
+| output: patched ROM | 4,194,304 bytes | `b45e2f7bfce5a2072bf82c3aeeb387f868944640` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -65,14 +65,17 @@ short invincibility flash.
   (SEEK) or accelerate downwards (DROP). The generator guarantees that no two programs
   share the same bytes or the same opcode sequence. Bullet speed also scales with the
   enemy's level.
-* **Every enemy shoots copies of itself.** `tools/gen_bh_enemy_gfx.py` decodes each
-  enemy's battle sprite from the ROM and shrinks it into bullets: 32x32 enemies get four
-  16x16 minis (whole, mirrored, head, mirrored head); bigger enemies get one 32x32
-  bullet (the whole enemy at half size) drawn with the hardware's 32x32 sprite size and
-  mirrored for the odd bullet types. Shrinking uses majority-colour sampling so thin
-  parts survive. The sheets of the enemies present are uploaded to sprite VRAM at the
-  start of each battle and drawn with that enemy's own palette, so a Spiteful Crow
-  throws little crows and a Skate Punk throws skate punks.
+* **White shapes for bullets.** Bullets are plain monochrome shapes in the Undertale
+  manner: stars, rings, discs, diamonds, crosses, lines, squares, chevrons, crescents,
+  asterisks, bow ties, dot trails and waves (`tools/gen_bh_enemy_gfx.py`). Every enemy
+  still has its own sheet of four 16x16 shapes, picked from that library so that
+  enemies differ from one another, and the 171 enemies whose battle sprite is bigger
+  than 32 px keep one 32x32 shape drawn with the hardware's 32x32 sprite size and
+  mirrored for the odd bullet types (the size classes drive the spacing of the
+  generated attack programs). The sheets of the enemies present are uploaded to sprite
+  VRAM at the start of each battle and drawn in white with the engine's own palette.
+  Earlier versions cut the bullets out of each enemy's own battle sprite; the shapes
+  read better at bullet size.
 
 **Party attacks.** When Ness, Paula, Jeff or Poo perform a physical attack ("Bash",
 "Shoot"...), the box shows a red/yellow/green gauge with a reticle that sweeps right,
@@ -221,6 +224,9 @@ modifier (`test_ag_option*.txt` check the option itself).
 
 ### 2026-09-05
 
+- Bullets are white shapes (stars, rings, diamonds, crosses, lines...) instead of
+  pieces cut from each enemy's sprite. Each enemy keeps its own sheet of shapes and its
+  bullet size class, so every attack program plays exactly as before.
 - Per-attack games: a Set Up option ("Battle games: Standard / Per attack", off by
   default) under which every enemy attack plays the game designed for it in
   `docs/attack_minigames.md`. Eighteen new building blocks (twelve games and six
@@ -282,14 +288,14 @@ ebsrc/                    local checkout of the disassembly with the patch appli
                           (generated: the per-attack game table; bank $F0)
   src/bankconfig/US/bank30-33.asm  the four new banks ($F0-$F3) of the 4 MB ROM
   include/bullet_hell.asm constants, direct-page layout, pattern opcode macros
-  src/bin/bh/             generated: base tiles, palette, enemy bullet sheets (118 KB)
+  src/bin/bh/             generated: base tiles, palette, per-enemy bullet shape sheets (118 KB)
 tools/                    toolchain, all built in user space
   cc65/ ebbinex/ spcasm/ ldc2/   assembler, asset extractor, SPC assembler, D compiler
   snes9x/libretro/        headless emulator core
   harness/ebharness.c     scripted headless test runner (screenshots, RAM peek/poke,
                           save states, symbol names from the ld65 map)
   gen_bh_gfx.py           base tiles (heart, box lines, gauge, bones) from ASCII art
-  gen_bh_enemy_gfx.py     decodes every enemy's battle sprite and cuts its bullet sheet
+  gen_bh_enemy_gfx.py     writes every enemy's sheet of white bullet shapes (and its hit boxes)
   gen_bh_enemies.py       writes the per-enemy records and attack programs
   gen_bh_attack_games.py  writes the per-attack game table from docs/attack_minigames.md
   make_ips.py             builds the IPS patch from the original and the built ROM
@@ -316,7 +322,7 @@ source tools/env.sh                                # needs the toolchain under t
 cd ebsrc
 ebbinex earthbound.yml "../EarthBound (USA).sfc"   # once: extract assets from the ROM
 python3 ../tools/gen_bh_gfx.py                     # base tiles and palette  -> src/bin/bh/
-python3 ../tools/gen_bh_enemy_gfx.py               # per-enemy bullet sheets and hit boxes
+python3 ../tools/gen_bh_enemy_gfx.py               # per-enemy bullet shape sheets and hit boxes
 python3 ../tools/gen_bh_enemies.py                 # per-enemy records and attack programs
 make -j16                                          # -> build/earthbound.sfc
 make -j16 EXTRA="-D BH_DEBUG" BUILDDIR=build-debug # optional: debug-menu build (hold Down+L at power-on)
@@ -472,9 +478,9 @@ real battery save both with and without HP top-ups. No hang was found; every run
 * Sprite tiles are uploaded once per battle, right after the enemy sprites are loaded
   (screen still blanked), into the first unused 32x32 enemy-sprite "piece" slots of OBJ
   VRAM: five base pieces, then one sheet per enemy kind present (up to four). They are
-  re-uploaded only if an enemy is added mid-battle. Bullets cut from an enemy use the
-  OBJ palette slot of that enemy's sprite; everything else uses OBJ palette 7. Uploading the tiles per phase overran the
-  vertical blank and produced a garbled frame.
+  re-uploaded only if an enemy is added mid-battle. Everything the engine draws uses
+  OBJ palette 7. Uploading the tiles per phase overran the vertical blank and produced
+  a garbled frame.
 * RAM: the engine's direct page is a 224-byte gap after `OAM1_HIGH_TABLE` that the
   original game never used; the 32-entry bullet table sits in previously unused space at
   the end of the main RAM segment (`BH_BULLETS`). Nothing overlays game buffers.

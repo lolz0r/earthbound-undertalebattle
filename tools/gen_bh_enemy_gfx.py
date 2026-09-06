@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-"""Cut four bullet sprites out of every enemy's own battle sprite.
+"""Every enemy's bullet sheet: four monochrome shapes (or one big one).
 
-For each enemy id (0-230) this reads the enemy's battle sprite (HAL-compressed 4bpp
-tiles in src/bin/battle_sprites), rebuilds the image, and derives a 32x32 "sheet" of
-four 16x16 sprites in the enemy's own palette indices:
-  0  the whole enemy shrunk to fit 16x16        (a "mini")
-  1  the mini, mirrored
-  2  the enemy's upper half shrunk to fit 16x16 (its head)
-  3  the head, mirrored
-Native-size crops were tried first and looked like random texture chunks for big
-enemies, so everything is a scaled-down whole (or upper half) that stays recognisable.
-At battle time the sheet is uploaded to sprite VRAM and drawn with the enemy's own
-OBJ palette, so the bullets are literally pieces of that enemy.
+Bullets used to be the enemy's own battle sprite shrunk into 16x16 pieces. They are
+now general-purpose white shapes in the Undertale manner: stars, rings, discs,
+diamonds, crosses, lines, chevrons, crescents... Each enemy id (0-230) still gets
+its own 32x32 "sheet" of four 16x16 sprites (types THEME0-3 in the attack programs),
+chosen deterministically from the library below so that enemies differ from one
+another, and enemies whose battle sprite is larger than 32 px keep one 32x32 shape
+(the size classes drive the spacing of the generated attack programs, so they are
+kept exactly as before). The sheets are drawn with the engine's own palette (white).
 
 Outputs (in src/bin/bh):
   enemy_sheets_a.bin   sheets for ids 0-127  (512 bytes each)
   enemy_sheets_b.bin   sheets for ids 128-230
-  bh_enemy_hitboxes.bin  231 x 4 x (half width, half height)
+  bh_enemy_hitboxes.bin  231 x 4 x (half width, half height); bit 7 of the first
+                         width flags a 32x32 sheet
   enemy_preview.png    contact sheet of a few enemies (needs PIL)
 """
 import os, re, sys
@@ -105,40 +103,81 @@ def bbox(img):
         return (0, 0, len(img[0]), len(img))
     return (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
 
-def crop(img, x0, y0, w, h):
-    H, W = len(img), len(img[0])
-    return [[img[y][x] if 0 <= x < W and 0 <= y < H else 0 for x in range(x0, x0 + w)] for y in range(y0, y0 + h)]
-
-def scale_to(img, box, size=16):
-    """Shrink a region to fit size x size. Each output pixel takes the most common opaque
-    colour of its source block (if at least a third of the block is opaque), so thin
-    features such as legs, arms and skateboards survive instead of dropping out."""
-    x0, y0, x1, y1 = box
-    w, h = x1 - x0, y1 - y0
-    s = max(w, h) / size
-    out = [[0] * size for _ in range(size)]
-    ox, oy = (size - int(w / s)) // 2, (size - int(h / s)) // 2
-    for y in range(size):
-        for x in range(size):
-            bx0, by0 = x0 + int((x - ox) * s), y0 + int((y - oy) * s)
-            bx1, by1 = x0 + int((x - ox + 1) * s), y0 + int((y - oy + 1) * s)
-            if bx0 >= x1 or by0 >= y1 or bx1 <= x0 or by1 <= y0:
-                continue
-            bx0, by0 = max(bx0, x0), max(by0, y0)
-            bx1, by1 = min(max(bx1, bx0 + 1), x1), min(max(by1, by0 + 1), y1)
-            counts, total = {}, 0
-            for sy in range(by0, by1):
-                for sx in range(bx0, bx1):
-                    total += 1
-                    v = img[sy][sx]
-                    if v:
-                        counts[v] = counts.get(v, 0) + 1
-            if counts and sum(counts.values()) * 3 >= total:
-                out[y][x] = max(counts, key=counts.get)
+def parse_enemies():
+    text = open(os.path.join(ROOT, "src", "data", "battle", "enemies.asm")).read()
+    blocks = text.split("PADDEDEBTEXT ")[1:]
+    out = []
+    for b in blocks:
+        name = re.match(r'"([^"]*)"', b).group(1)
+        sprite = int(re.search(r"\.WORD \$([0-9A-Fa-f]+) ;Battle sprite", b).group(1), 16)
+        pal = int(re.search(r"\.BYTE \$([0-9A-Fa-f]+) ;Palette", b).group(1), 16)
+        out.append((name, sprite, pal))
     return out
 
-def mirror(sp):
-    return [row[::-1] for row in sp]
+def sprite_sizes():
+    text = open(os.path.join(ROOT, "src", "data", "battle", "battle_sprites_pointers.asm")).read()
+    return [int(m) for m in re.findall(r"BATTLE_SPRITE_SIZE::_(\d+)X\d+", text)], \
+           [{"32X32": 1, "64X32": 2, "32X64": 3, "64X64": 4, "128X64": 5, "128X128": 6}[m]
+            for m in re.findall(r"BATTLE_SPRITE_SIZE::_(\d+X\d+)", text)]
+
+
+WHITE = 1     # palette index of white in the engine's palette (tools/gen_bh_gfx.py)
+
+# ---- shape rasterisers: n -> n x n grid of 0/1, drawn about the centre ----
+import math, random
+
+def raster(n, pred):
+    return [[1 if pred(x + 0.5 - n / 2, y + 0.5 - n / 2) else 0 for x in range(n)] for y in range(n)]
+
+def in_polygon(px, py, poly):
+    inside = False
+    for i in range(len(poly)):
+        x0, y0 = poly[i]; x1, y1 = poly[(i + 1) % len(poly)]
+        if (y0 > py) != (y1 > py):
+            xi = x0 + (py - y0) * (x1 - x0) / (y1 - y0)
+            if px < xi:
+                inside = not inside
+    return inside
+
+def star_poly(n, points=5, inner=0.42):
+    ro, ri = 0.48 * n, 0.48 * n * inner
+    poly = []
+    for k in range(points * 2):
+        a = -math.pi / 2 + k * math.pi / points
+        r = ro if k % 2 == 0 else ri
+        poly.append((r * math.cos(a), r * math.sin(a)))
+    return poly
+
+def line_dist(x, y, ang):
+    """distance from (x, y) to the line through the origin at angle ang"""
+    return abs(-math.sin(ang) * x + math.cos(ang) * y)
+
+def shape_star(n):     p = star_poly(n); return raster(n, lambda x, y: in_polygon(x, y, p))
+def shape_ring(n):     return raster(n, lambda x, y: (0.30 * n) ** 2 <= x * x + y * y <= (0.46 * n) ** 2)
+def shape_disc(n):     return raster(n, lambda x, y: x * x + y * y <= (0.40 * n) ** 2)
+def shape_diamond(n):  return raster(n, lambda x, y: 0.30 * n <= abs(x) + abs(y) <= 0.47 * n)
+def shape_plus(n):     w = 1.5 * n / 16; return raster(n, lambda x, y: (abs(x) < w or abs(y) < w) and max(abs(x), abs(y)) <= 0.45 * n)
+def shape_x(n):        w = 1.1 * n / 16; return raster(n, lambda x, y: (abs(x - y) < w * 1.42 or abs(x + y) < w * 1.42) and max(abs(x), abs(y)) <= 0.42 * n)
+def shape_triangle(n): return raster(n, lambda x, y: -0.42 * n <= y <= 0.36 * n and abs(x) <= (y + 0.42 * n) * 0.62)
+def shape_vline(n):    w = 1.0 * n / 16; return raster(n, lambda x, y: abs(x) <= w and abs(y) <= 0.48 * n)
+def shape_hline(n):    w = 1.0 * n / 16; return raster(n, lambda x, y: abs(y) <= w and abs(x) <= 0.48 * n)
+def shape_square(n):   t = 2.0 * n / 16; return raster(n, lambda x, y: 0.44 * n - t <= max(abs(x), abs(y)) <= 0.44 * n)
+def shape_chevron(n):  t = 1.2 * n / 16; return raster(n, lambda x, y: abs(x) <= 0.45 * n and abs(y - (abs(x) * 0.8 - 0.32 * n)) <= t)
+def shape_crescent(n): return raster(n, lambda x, y: x * x + y * y <= (0.42 * n) ** 2 and (x - 0.16 * n) ** 2 + (y + 0.08 * n) ** 2 > (0.36 * n) ** 2)
+def shape_asterisk(n): w = 1.0 * n / 16; return raster(n, lambda x, y: x * x + y * y <= (0.46 * n) ** 2 and min(line_dist(x, y, a) for a in (0, math.pi / 3, 2 * math.pi / 3)) <= w)
+def shape_bowtie(n):   return raster(n, lambda x, y: abs(x) <= 0.44 * n and abs(y) <= abs(x) * 0.75)
+def shape_dots(n):     r = 0.13 * n; return raster(n, lambda x, y: any((x - cx) ** 2 + (y - cy) ** 2 <= r * r for cx, cy in ((-0.28 * n, 0.28 * n), (0, 0), (0.28 * n, -0.28 * n))))
+def shape_wave(n):     t = 1.0 * n / 16; return raster(n, lambda x, y: abs(x) <= 0.47 * n and abs(y - 0.22 * n * math.sin(x * 2 * math.pi / (0.94 * n))) <= t)
+
+SHAPES = [("star", shape_star), ("ring", shape_ring), ("disc", shape_disc), ("diamond", shape_diamond),
+          ("plus", shape_plus), ("x", shape_x), ("triangle", shape_triangle), ("vline", shape_vline),
+          ("hline", shape_hline), ("square", shape_square), ("chevron", shape_chevron), ("crescent", shape_crescent),
+          ("asterisk", shape_asterisk), ("bowtie", shape_bowtie), ("dots", shape_dots), ("wave", shape_wave)]
+BIG_SHAPES = ["star", "ring", "diamond", "plus", "x", "triangle", "square", "asterisk", "chevron", "crescent"]
+BY_NAME = dict(SHAPES)
+
+def white(grid):
+    return [[WHITE if v else 0 for v in row] for row in grid]
 
 def hitbox(sp, big=False):
     x0, y0, x1, y1 = bbox(sp)
@@ -162,31 +201,18 @@ def sheet_bytes(sprites):
             out += encode_tile([[piece[tr * 8 + y][tc * 8 + x] for x in range(8)] for y in range(8)])
     return bytes(out)
 
-def parse_enemies():
-    text = open(os.path.join(ROOT, "src", "data", "battle", "enemies.asm")).read()
-    blocks = text.split("PADDEDEBTEXT ")[1:]
-    out = []
-    for b in blocks:
-        name = re.match(r'"([^"]*)"', b).group(1)
-        sprite = int(re.search(r"\.WORD \$([0-9A-Fa-f]+) ;Battle sprite", b).group(1), 16)
-        pal = int(re.search(r"\.BYTE \$([0-9A-Fa-f]+) ;Palette", b).group(1), 16)
-        out.append((name, sprite, pal))
-    return out
+def is_big(img):
+    x0, y0, x1, y1 = bbox(img)
+    return max(x1 - x0, y1 - y0) > 32
 
-def sprite_sizes():
-    text = open(os.path.join(ROOT, "src", "data", "battle", "battle_sprites_pointers.asm")).read()
-    return [int(m) for m in re.findall(r"BATTLE_SPRITE_SIZE::_(\d+)X\d+", text)], \
-           [{"32X32": 1, "64X32": 2, "32X64": 3, "64X64": 4, "128X64": 5, "128X128": 6}[m]
-            for m in re.findall(r"BATTLE_SPRITE_SIZE::_(\d+X\d+)", text)]
-
-def load_palette(index):
-    p = os.path.join(ROOT, "src", "bin", "battle_sprites", "palettes", f"{index}.pal")
-    raw = open(p, "rb").read()
-    cols = []
-    for i in range(16):
-        v = raw[i * 2] | (raw[i * 2 + 1] << 8)
-        cols.append(((v & 31) << 3, ((v >> 5) & 31) << 3, ((v >> 10) & 31) << 3))
-    return cols
+def shapes_for(eid, big):
+    """the enemy's shapes: one 32x32 for big sprites, else four distinct 16x16 ones"""
+    r = random.Random(eid * 7919 + 13)
+    if big:
+        nm = r.choice(BIG_SHAPES)
+        return [BY_NAME[nm](32)], [nm]
+    names = r.sample([s[0] for s in SHAPES], 4)
+    return [BY_NAME[nm](16) for nm in names], names
 
 def main():
     enemies = parse_enemies()
@@ -194,31 +220,20 @@ def main():
     sheets, boxes, previews = [], [], []
     cache = {}
     for eid, (name, sprite, pal) in enumerate(enemies):
-        if sprite == 0 or sprite - 1 >= len(sizes):
-            sprites = [[[0] * 16 for _ in range(16)] for _ in range(4)]
-        else:
+        big = False
+        if sprite != 0 and sprite - 1 < len(sizes):
             idx = sprite - 1
             if idx not in cache:
                 path = os.path.join(ROOT, "src", "bin", "battle_sprites", f"{idx}.gfx.lzhal")
                 if not os.path.exists(path):   # a few sprites differ per region and live under bin/US
                     path = os.path.join(ROOT, "src", "bin", "US", "battle_sprites", f"{idx}.gfx.lzhal")
-                data = exhal(open(path, "rb").read())
-                cache[idx] = sprite_image(data, sizes[idx])
-            img = cache[idx]
-            x0, y0, x1, y1 = bbox(img)
-            cx = (x0 + x1) // 2
-            if max(x1 - x0, y1 - y0) > 32:
-                # big enemy: one 32x32 bullet, the whole enemy shrunk 2x (4x for 128 px sprites);
-                # the engine draws it as a 32x32 sprite and flips it for the odd bullet types
-                big = scale_to(img, (x0, y0, x1, y1), 32)
-                sprites = [big]
-            else:
-                mini = scale_to(img, (x0, y0, x1, y1))
-                head = scale_to(img, (x0, y0, x1, y0 + max(16, (y1 - y0) // 2)))
-                sprites = [mini, mirror(mini), head, mirror(head)]
+                cache[idx] = is_big(sprite_image(exhal(open(path, "rb").read()), sizes[idx]))
+            big = cache[idx]
+        grids, names = shapes_for(eid, big)
+        sprites = [white(g) for g in grids]
         sheets.append(sheet_bytes(sprites))
-        boxes.append([hitbox(s, len(sprites) == 1) for s in sprites] * (4 if len(sprites) == 1 else 1))
-        previews.append((eid, name, pal, sprites))
+        boxes.append([hitbox(s, big) for s in sprites] * (4 if big else 1))
+        previews.append((eid, name, names, sprites))
     outdir = os.path.join(ROOT, "src", "bin", "bh")
     os.makedirs(outdir, exist_ok=True)
     with open(os.path.join(outdir, "enemy_sheets_a.bin"), "wb") as f:
@@ -229,25 +244,24 @@ def main():
         for bx in boxes:
             for hw, hh in bx:
                 f.write(bytes((hw, hh)))
-    print(f"wrote {len(sheets)} enemy sheets ({sum(len(s) for s in sheets)} bytes) and hit boxes to {outdir}")
+    nbig = sum(1 for p in previews if len(p[3]) == 1)
+    print(f"wrote {len(sheets)} enemy sheets ({sum(len(s) for s in sheets)} bytes, {nbig} big) and hit boxes to {outdir}")
     try:
         from PIL import Image
         ids = [int(a) for a in sys.argv[2:]] or [159, 81, 1, 121, 55, 93, 2, 34, 9, 32, 150, 88]
         cell = 16 * 3
         im = Image.new("RGB", (len(ids) * (4 * cell + 8), 2 * cell + 4), (40, 40, 40))
         for k, eid in enumerate(ids):
-            _, name, pal, sprites = previews[eid]
-            cols = load_palette(pal)
+            _, name, names, sprites = previews[eid]
             for i, sp in enumerate(sprites):
                 for y in range(len(sp)):
                     for x in range(len(sp[0])):
-                        v = sp[y][x]
-                        if v:
+                        if sp[y][x]:
                             for dy in range(3):
                                 for dx in range(3):
-                                    im.putpixel((k * (4 * cell + 8) + i * cell + x * 3 + dx, y * 3 + dy), cols[v])
+                                    im.putpixel((k * (4 * cell + 8) + i * cell + x * 3 + dx, y * 3 + dy), (255, 255, 255))
         im.save(os.path.join(outdir, "enemy_preview.png"))
-        print("preview:", [previews[e][1] for e in ids])
+        print("preview:", [(previews[e][1], previews[e][2]) for e in ids])
     except ImportError:
         pass
 

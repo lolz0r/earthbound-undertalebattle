@@ -14335,10 +14335,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..00861ec4
+index 00000000..461ed9f7
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,3197 @@
+@@ -0,0 +1,3194 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -17240,15 +17240,12 @@ index 00000000..00861ec4
 +	AND #$00FF
 +	CMP #$80
 +	BNE @base
-+	; a sprite cut from the attacking enemy: its sheet, its palette
++	; one of the attacking enemy's bullet shapes: its sheet, drawn (white) with the
++	; engine's own palette like every other piece
 +	LDA z:BH_THEME_TILE
 +	CLC
 +	ADC z:BH_T2
 +	STA z:BH_T2
-+	LDA z:BH_THEME_PAL
-+	ASL
-+	ORA #$30
-+	STA z:BH_T4
 +	PLX
 +	RTS
 +@base:
