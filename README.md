@@ -12,13 +12,13 @@ disassembly itself is not included, see "Building from source".
 
 ## Playing it: applying the patch
 
-`EarthBound - Bullet Hell.ips` (about 290 KB) turns a clean EarthBound (USA) ROM into the
+`EarthBound - Bullet Hell.ips` (about 320 KB) turns a clean EarthBound (USA) ROM into the
 hacked one. No ROM is distributed here; you need your own copy.
 
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `30dd117bed8c47cd72aed0e85928df344e12886e` |
+| output: patched ROM | 4,194,304 bytes | `c394d90affc7b0c3347c9bb25b89807b4449ea3b` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -34,7 +34,7 @@ Notes:
 * The patch is for the unheadered ROM. If your file is 3,146,240 bytes it has a
   512-byte copier header; `apply_ips.py` strips it automatically, for other tools remove
   it first (Flips does this too) or the patch lands 512 bytes off.
-* The result is 4 MB (the original 3 MB plus three new banks of per-enemy data) with a
+* The result is 4 MB (the original 3 MB plus four new banks of per-enemy data) with a
   corrected header checksum. It runs on the usual emulators (snes9x, bsnes/higan, Mesen 2,
   RetroArch cores) and on flash carts that take 4 MB HiROM images. The game's
   copy-protection checks are removed, so the expanded ROM does not trigger the
@@ -94,7 +94,7 @@ Each physical attack by a party member picks one of six minigames at random
 timed block otherwise. Auto Fight skips all of them. Each box carries a one-line
 instruction along its bottom edge, in the same sprite font as the grade labels
 ("MASH ANY BUTTON", "TAP THE BUTTON A NOTE HITS", "DODGE THE BULLETS" ...); the
-lines are pre-rendered by `tools/gen_bh_gfx.py` (`bh_hints.bin`, bank $F0) and a
+lines are pre-rendered by `tools/gen_bh_gfx.py` (`bh_hints.bin`, bank $F3) and a
 game uploads its own line into three spare sprite slots when it starts. Every graded
 press floats a **PERFECT / GOOD / OK / MISS** label with its own sound, so the grade
 is never in doubt, and a game you never press a button in says MISS and whiffs. Every
@@ -149,6 +149,59 @@ generated from a first pass that reads the random lanes, sequence or reel timing
 then press the right buttons at the right frames (`waitle`/`waitmem`);
 `tests/test_mash*.txt` and `tests/test_focus*.txt` cover the rest.
 
+## Per-attack games (a Set Up option, off by default)
+
+The file-select **Set Up** menu, after the text speed, sound and flavour questions,
+asks one more: **Battle games: Standard / Per attack**. The setting is an unused event
+flag saved in the file, so existing saves default to Standard (the games described
+above) and every file can be set on its own.
+
+With **Per attack**, each enemy attack plays a game built for that enemy and that
+attack instead of the random dodge box or timed block: a Spiteful Crow's peck comes
+at the heart from one side and you hold the d-pad toward it, its "eyes" attack drifts
+crows and green blocks through the box, Master Belch's slime closes the walls in, a
+Territorial Oak's flames light danger cells, a hypnosis attack scrambles the d-pad
+for one dodge box, a tempo attack asks for presses on the beat. The design table with
+every one of the 537 enemy-attack pairs is `docs/attack_minigames.md`; it composes
+them from twenty building blocks:
+
+| block | the game | block | the game |
+|---|---|---|---|
+| 1 dodge box | the enemy's own bullet pattern | 11 spotlight * | bullets show only near the heart |
+| 2 timed block | the four brackets | 12 wiggle | alternate Left/Right to fill a meter |
+| 3 danger cells | cells warn, then strike | 13 counter shot | press A as the sprite crosses the crosshair |
+| 4 sweeps | full-width bars with a gap | 14 beat | press A on the tick |
+| 5 hold and release | let go of A inside the green | 15 face it | hold the d-pad toward the strike |
+| 6 arrow chain | press the arrows in order | 16 pick a cell | be in the safe cell at the reveal |
+| 7 scrambled controls * | mirrored, rotated or lagging d-pad | 17 freeze * | do not move on the flash |
+| 8 pull * | a drag toward a harmful edge | 18 copy | repeat the shown sequence |
+| 9 closing walls * | survive the shrinking box | 19 count steps | step onto the ring |
+| 10 catch and avoid | touch green, avoid the rest | 20 two hearts * | a mirrored second heart |
+
+The blocks marked * are modifiers: they lay over the dodge box or over a heart-moving
+block (3, 4, 10, 16; scrambled controls also over the d-pad games 6, 15 and 19;
+freeze over everything but the timed block). Each row of the table gets its own
+parameters (pattern, speed, gap, count, tell length, radius...) hashed from the enemy
+and action, so two enemies sharing a block still play differently, and every game
+carries its own instruction line. Grades and damage follow the standard games: a
+clean run dodges the attack, hits scale the damage (50 / 75 / 100 %). An attack with
+no row (the flavour-only actions, and any block that finds no sprite room) plays the
+standard dodge box.
+
+The data is generated: `tools/gen_bh_attack_games.py` reads the design table, the
+action enum and the per-enemy records and writes
+`ebsrc/src/battle/bullet_hell/bh_attack_games.asm` (an index by enemy id and 9-byte
+entries: action, block, modifier, four parameters, hint line; 858 entries for 227
+enemies, bank $F0). The engine is `bh_ag_engine.asm` (bank $EE, one init / update /
+render routine per block, the modifier hooks) and the option code is `bh_setup.asm`.
+The instruction lines moved to a fourth new bank ($F3, `bank33.asm`) to make room.
+
+Test hooks: `poke BH_DP+0x9C 9` forces the per-attack path, `poke BH_AG_STATE+7 <block>`
+forces a block with built-in defaults (a modifier block number plays the dodge box
+with that modifier), `poke BH_AG_STATE+80 <modifier>` lays a modifier over the forced
+block. Harness values are hex bytes. `tests/test_ag_*.txt` cover every block and
+modifier (`test_ag_option*.txt` check the option itself).
+
 ## Classic mode, rolling HP and fairness
 
 - **Auto Fight turns the minigames off.** Pick Auto Fight in the command menu and the
@@ -168,6 +221,14 @@ then press the right buttons at the right frames (`waitle`/`waitmem`);
 
 ### 2026-09-05
 
+- Per-attack games: a Set Up option ("Battle games: Standard / Per attack", off by
+  default) under which every enemy attack plays the game designed for it in
+  `docs/attack_minigames.md`. Eighteen new building blocks (twelve games and six
+  modifiers) in `bh_ag_engine.asm`, the generated table `bh_attack_games.asm`, d-pad
+  arrow sprites, and a fourth new bank for the instruction lines.
+- Two engine helpers no longer call the game's `MULT16` / `DIVISION16S`: those keep
+  their temporaries in the direct page and, with the engine's direct page selected,
+  overwrote the instruction line's and one piece's tile numbers.
 - Press feedback in every minigame: the icon the press lands on (lane button, gauge
   cursor, focus target, mash prompt, combo step, stopped reel) is ringed in white and
   pops up. One shared tracker (`BH_MG_PRESS`) remembers the last face button pressed.
@@ -212,10 +273,14 @@ EarthBound (USA).sfc      original ROM (No-Intro, SHA-1 d67a8ef3...) - you suppl
 EarthBound - Bullet Hell.ips  the hack as an IPS patch (see "Applying the patch")
 patches/ebsrc-bullet-hell.patch  the engine source as a git diff against upstream ebsrc
 ebsrc/                    local checkout of the disassembly with the patch applied (not in git)
-  src/battle/bullet_hell/ bh_engine.asm (engine, bank $EE), bh_data.asm (base graphics,
-                          type table), bh_enemies.asm (generated: per-enemy records,
-                          462 attack programs, hit boxes; bank $F0)
-  src/bankconfig/US/bank30-32.asm  the three new banks ($F0-$F2) of the 4 MB ROM
+  src/battle/bullet_hell/ bh_engine.asm (engine, bank $EE), bh_minigames.asm (the six
+                          attack games and the timed block), bh_ag_engine.asm (the
+                          per-attack games and modifiers), bh_setup.asm (the Set Up
+                          option), bh_data.asm (base graphics, type table),
+                          bh_enemies.asm (generated: per-enemy records, 462 attack
+                          programs, hit boxes; bank $F0), bh_attack_games.asm
+                          (generated: the per-attack game table; bank $F0)
+  src/bankconfig/US/bank30-33.asm  the four new banks ($F0-$F3) of the 4 MB ROM
   include/bullet_hell.asm constants, direct-page layout, pattern opcode macros
   src/bin/bh/             generated: base tiles, palette, enemy bullet sheets (118 KB)
 tools/                    toolchain, all built in user space
@@ -226,11 +291,13 @@ tools/                    toolchain, all built in user space
   gen_bh_gfx.py           base tiles (heart, box lines, gauge, bones) from ASCII art
   gen_bh_enemy_gfx.py     decodes every enemy's battle sprite and cuts its bullet sheet
   gen_bh_enemies.py       writes the per-enemy records and attack programs
+  gen_bh_attack_games.py  writes the per-attack game table from docs/attack_minigames.md
   make_ips.py             builds the IPS patch from the original and the built ROM
   apply_ips.py            applies it (Python 3 only, verifies SHA-1s, strips copier headers)
   fix_checksum.py         rewrites the header checksum (run by the Makefile after linking)
   env.sh                  puts the toolchain on PATH
-tests/                    harness scripts (*.txt), run.sh, captured screenshots in out/
+docs/attack_minigames.md  the design table: one game per enemy attack, 20 building blocks
+tests/                    harness scripts (*.txt), run.sh, run_batch.sh, screenshots in out/
 ```
 
 ## Building from source

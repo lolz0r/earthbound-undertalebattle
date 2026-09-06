@@ -29,6 +29,18 @@ or the status chance (50 % / 75 %), MISS is the full effect, exactly as the time
 does today. Heal, buff and summon actions are "interrupt" games: a good grade shrinks the
 heal, weakens the buff or stops the reinforcement, a MISS lets it through in full.
 
+## Implementation notes
+
+All twenty blocks are implemented (`ebsrc/src/battle/bullet_hell/bh_ag_engine.asm`) and
+the table below is compiled into the ROM by `tools/gen_bh_attack_games.py`; the games
+play when the Set Up option "Battle games: Per attack" is on. The engine honours a
+modifier only where it has something to act on: pull, closing walls, spotlight and two
+hearts over the heart-moving blocks (1, 3, 4, 10, 16), scrambled controls over those and
+the D-pad games (6, 15, 19), freeze over everything except the timed block. A row whose
+modifier does not apply plays its primary block plain (the generator drops the modifier).
+The "interrupt" grading of heal, buff and summon actions is not implemented: every game
+grades the action's damage or effect the same way the timed block does.
+
 ## Building blocks
 
 The concepts below are composed from these reusable mechanics. B1 and B2 exist already;

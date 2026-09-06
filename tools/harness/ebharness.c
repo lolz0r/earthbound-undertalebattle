@@ -434,6 +434,11 @@ int main(int argc, char **argv) {
             if (!f || !sr) { printf("sram: cannot open %s or no SRAM (%p, %zu)\n", a1, sr, sz); if (f) fclose(f); }
             else { size_t got = fread(sr, 1, sz, f); fclose(f); printf("sram: loaded %zu of %zu bytes from %s\n", got, sz, a1); }
         }
+        else if (!strcmp(cmd, "peeksram")) {
+            /* peeksram OFF N: hex dump of N bytes of cartridge SRAM at offset OFF */
+            unsigned long off = parse_num(a1), n2 = n >= 3 ? parse_num(a2) : 16; uint8_t *sr = retro_get_memory_data_p(RETRO_MEMORY_SAVE_RAM);
+            printf("sram %05lX:", off); for (unsigned long i = 0; i < n2 && sr; i++) printf(" %02X", sr[off + i]); printf("\n");
+        }
         else if (!strcmp(cmd, "cpu")) {
             /* cpu: print the CPU registers (needs the patched snes9x core) */
             if (!ebh_get_cpu_p) printf("cpu: this core has no ebh_get_cpu\n");

@@ -415,12 +415,34 @@ for y in range(16):
         if 5.6 ** 2 <= r2 <= 7.9 ** 2:
             RING[y][x] = WHITE
 
+ARROW_U = from_art([          # D-pad arrows for the arrow chain / copy / steps games (flips give left and down)
+    "................",
+    ".......ww.......",
+    "......wwww......",
+    ".....wwwwww.....",
+    "....wwwwwwww....",
+    "...wwwwwwwwww...",
+    "..wwwwwwwwwwww..",
+    "......wwww......",
+    "......wwww......",
+    "......wwww......",
+    "......wwww......",
+    "......wwww......",
+    "......wwww......",
+    "................",
+    "................",
+    "................",
+], {"w": WHITE})
+ARROW_R = [[ARROW_U[15 - x][y] for x in range(16)] for y in range(16)]   # rotated a quarter turn clockwise
+
 def piece_hline():
     p = blank()
     for y in (0, 1):
-        for x in range(32):
-            p[y][x] = WHITE
+        for x in range(16):
+            p[y][x] = WHITE            # sprite offset 0: the 16 px line
+    blit(p, ARROW_U, 16, 0)        # sprite offset 2
     blit(p, RING, 0, 16)           # sprite offset 32 of piece 1
+    blit(p, ARROW_R, 16, 16)       # sprite offset 34
     return p
 
 def vline16():
@@ -465,6 +487,24 @@ HINTS = [
     "PRESS A TO STOP EACH REEL",   # 4 slots
     "HIT THE BUTTONS IN ORDER",    # 5 combo
     "DODGE THE BULLETS",           # 6 dodge box
+    "STAY OFF THE LIT CELLS",      # 7  B3 danger cells
+    "SLIP THROUGH THE GAPS",       # 8  B4 sweeps
+    "HOLD A RELEASE IN GREEN",     # 9  B5 hold and release
+    "PRESS THE ARROWS IN ORDER",   # 10 B6 arrow chain
+    "CATCH GREEN AVOID RED",       # 11 B10 catch and avoid
+    "WIGGLE LEFT RIGHT FAST",      # 12 B12 wiggle
+    "PRESS A WHEN IT CROSSES",     # 13 B13 counter shot
+    "PRESS A ON THE BEAT",         # 14 B14 beat
+    "HOLD TOWARD THE ATTACK",      # 15 B15 face it
+    "STAND IN THE SAFE CELL",      # 16 B16 pick a cell
+    "REPEAT THE SEQUENCE",         # 17 B18 copy
+    "STEP ONTO THE MARK",          # 18 B19 count steps
+    "CONTROLS ARE SCRAMBLED",      # 19 B7
+    "FIGHT THE PULL",              # 20 B8
+    "THE WALLS CLOSE IN",          # 21 B9
+    "SHOTS HIDE IN THE DARK",           # 22 B11
+    "FREEZE ON THE FLASH",         # 23 B17
+    "MIND BOTH HEARTS",            # 24 B20
 ]
 HINT_PIECES = 3                    # up to 12 sprites = 36 letters per line
 

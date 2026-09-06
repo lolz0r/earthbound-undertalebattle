@@ -1,0 +1,42 @@
+load after_intro
+run 30
+poke CURRENT_BATTLE_GROUP 01 00
+poke ENEMIES_IN_BATTLE 01 00
+poke ENEMIES_IN_BATTLE_IDS 9F 00
+poke PARTY_CHARACTERS+10 E7 03
+poke PARTY_CHARACTERS+69 E7 03 E7 03
+poke BATTLE_INITIATIVE 02 00
+poke BATTLE_MODE FF FF
+waitmem BATTLE_MODE_FLAG 1 900
+poke BATTLERS_TABLE+17 E7 03 E7 03
+poke BATTLERS_TABLE+641 1E 00 1E 00
+poke BH_DP+0x9C 9
+poke BH_AG_STATE+7 0F
+spam2 a 40 3000 BH_DP 1 BH_DP+0x52 7
+run 30
+poke BH_AG_STATE+46 03 00
+shot ag15_0
+waitmem BH_AG_STATE+12 2 400
+hold up
+run 8
+shot ag15_1
+waitmem BH_AG_STATE+12 0 400
+release up
+peek BH_AG_STATE 30
+waitmem BH_AG_STATE+12 2 400
+hold right
+run 8
+shot ag15_2
+waitmem BH_AG_STATE+12 0 400
+release right
+peek BH_AG_STATE 30
+waitmem BH_AG_STATE+12 2 400
+hold left
+run 8
+shot ag15_3
+waitmem BH_AG_STATE+12 0 400
+release left
+peek BH_AG_STATE 30
+waitmem BH_DP 0 1500
+peek BH_DP+0x0A 2
+peek BH_DP+0x3E 2
