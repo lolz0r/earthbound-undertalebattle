@@ -17535,7 +17535,7 @@ index 00000000..461ed9f7
 +	RTS
 diff --git a/src/battle/bullet_hell/bh_hint_table.asm b/src/battle/bullet_hell/bh_hint_table.asm
 new file mode 100644
-index 00000000..200b10b6
+index 00000000..bd900d03
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_hint_table.asm
 @@ -0,0 +1,27 @@
@@ -17552,7 +17552,7 @@ index 00000000..200b10b6
 +	.BYTE 7	; SLIP THROUGH THE GAPS
 +	.BYTE 8	; HOLD A RELEASE IN GREEN
 +	.BYTE 9	; PRESS THE ARROWS IN ORDER
-+	.BYTE 7	; CATCH GREEN AVOID RED
++	.BYTE 8	; CATCH GREEN DODGE WHITE
 +	.BYTE 8	; WIGGLE LEFT RIGHT FAST
 +	.BYTE 8	; PRESS A WHEN IT CROSSES
 +	.BYTE 7	; PRESS A ON THE BEAT
