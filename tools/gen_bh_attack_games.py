@@ -53,7 +53,7 @@ def params(eid, aid, prim, mod):
     speed, tempo, cat = (r[2] or 16), (r[3] or 16), (r[6] if len(r) > 6 else 9)
     v = lambda k, n: (h >> (k * 5)) % n          # small per-row variations
     p = [0, 0, 0, 0]
-    if prim == 3:   p = [v(0, 8), 12 + v(1, 4) * 4, 3 + v(2, 3), 0]          # pattern, warn frames, waves
+    if prim == 3:   p = [20 + v(0, 4) * 4, 36 + v(1, 4) * 8, 3 + v(2, 3), 0]  # wave speed/16, frames between waves, waves
     elif prim == 4: p = [v(0, 6), 32 + v(1, 2) * 16, 3 + v(2, 3), 0]         # direction, gap px, bars
     elif prim == 5: p = [2 + v(0, 3), 10 + v(1, 3) * 4, 40 + v(2, 4) * 10, 0] # fill/frame, window px, window pos
     elif prim == 6: p = [3 + v(0, 4), 9 + v(1, 3), 0, 0]                     # arrows, blocks of 20 frames

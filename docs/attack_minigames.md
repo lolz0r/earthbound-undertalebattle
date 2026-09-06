@@ -51,8 +51,10 @@ update-and-render routine that reads the same heart position, bullet table and g
    enter from the edges; blue bullets only hurt a moving heart, orange only a still one.
 2. **B2 Bracket press** - four brackets close on a target; press A when they frame it,
    graded by pixel distance (the timed block / focus game).
-3. **B3 Danger cells** - the interior is a grid of cells; cells flash a warning for a
-   few frames, then hurt for a moment; the safe cells stay dark. Patterns are data.
+3. **B3 Hop the waves** - the heart runs along the floor of the box; waves sweep in
+   along the floor from either side and A hops the heart over them. Speed, spacing
+   and count are data. (This replaced the original "danger cells" block, a grid of
+   cells that lit up before striking; the rows below still describe cells.)
 4. **B4 Sweeps** - a full-width or full-height bar with a gap crosses the box; the
    heart must be in the gap when it passes. Speed, gap size and direction are data.
 5. **B5 Hold and release** - hold a button while a meter fills; release inside the

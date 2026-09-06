@@ -725,10 +725,10 @@ index 6375a6d9..5a858405 100644
  INTRO_BG2_BUFFER:
 diff --git a/src/battle/bullet_hell/bh_ag_engine.asm b/src/battle/bullet_hell/bh_ag_engine.asm
 new file mode 100644
-index 00000000..3c3f8ecf
+index 00000000..c2e54740
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_ag_engine.asm
-@@ -0,0 +1,3785 @@
+@@ -0,0 +1,3639 @@
 +; ===========================================================================
 +; Attack-specific minigames ("Battle games: Per attack" in Set Up).
 +;   BH_AG_LOOKUP finds the entry for the attacking enemy and its action in the
@@ -855,7 +855,7 @@ index 00000000..3c3f8ecf
 +BH_AG_DEFAULTS:
 +	.BYTE 0, 0, 0, 0, 0, 6      ; 1 dodge
 +	.BYTE 0, 0, 0, 0, 0, 2      ; 2 bracket
-+	.BYTE 0, 0, 16, 4, 0, 7     ; 3 cells: pattern, warn frames, waves
++	.BYTE 0, 24, 48, 4, 0, 7    ; 3 hop: wave speed, frames between waves, waves
 +	.BYTE 0, 4, 32, 4, 0, 8     ; 4 sweeps: alternate left/right, 32 px gap, 4 bars
 +	.BYTE 0, 3, 14, 60, 0, 9    ; 5 hold
 +	.BYTE 0, 4, 10, 0, 0, 10    ; 6 arrows
@@ -963,6 +963,12 @@ index 00000000..3c3f8ecf
 +	LDA z:BH_FIGHT_STATE
 +	BNE @loop
 +	JSR BH_AG_MOD_UPDATE
++	LDA z:BH_BOX_Y1
++	SEC
++	SBC #34                 ; the heart stays above the instruction line
++	CMP z:BH_HEART_Y
++	BCS @loop
++	STA z:BH_HEART_Y
 +	BRA @loop
 +
 +; the block's outcome: A = grade (0 perfect .. 3 miss) -> label, sound, damage, wind-down
@@ -1080,7 +1086,7 @@ index 00000000..3c3f8ecf
 +	.WORD .LOWORD(BH_AG_INIT_NONE)   ; 0
 +	.WORD .LOWORD(BH_AG_INIT_NONE)   ; 1 dodge (the standard phase)
 +	.WORD .LOWORD(BH_AG_INIT_NONE)   ; 2 bracket
-+	.WORD .LOWORD(BH_AG_CELLS_INIT)  ; 3 cells
++	.WORD .LOWORD(BH_AG_HOP_INIT)  ; 3 cells
 +	.WORD .LOWORD(BH_AG_SWEEPS_INIT) ; 4 sweeps
 +	.WORD .LOWORD(BH_AG_HOLD_INIT)   ; 5 hold
 +	.WORD .LOWORD(BH_AG_ARROWS_INIT) ; 6 arrows
@@ -1100,7 +1106,7 @@ index 00000000..3c3f8ecf
 +	.WORD .LOWORD(BH_AG_INIT_NONE)   ; 20
 +BH_AG_UPDATE_TABLE:
 +	.WORD .LOWORD(BH_AG_NOP), .LOWORD(BH_AG_NOP), .LOWORD(BH_AG_NOP)
-+	.WORD .LOWORD(BH_AG_CELLS_UPDATE)      ; 3
++	.WORD .LOWORD(BH_AG_HOP_UPDATE)      ; 3
 +	.WORD .LOWORD(BH_AG_SWEEPS_UPDATE)     ; 4
 +	.WORD .LOWORD(BH_AG_HOLD_UPDATE)       ; 5
 +	.WORD .LOWORD(BH_AG_ARROWS_UPDATE)     ; 6
@@ -1118,7 +1124,7 @@ index 00000000..3c3f8ecf
 +	.WORD .LOWORD(BH_AG_NOP)
 +BH_AG_RENDER_TABLE:
 +	.WORD .LOWORD(BH_AG_DRAW_HEART), .LOWORD(BH_AG_DRAW_HEART), .LOWORD(BH_AG_DRAW_HEART)
-+	.WORD .LOWORD(BH_AG_CELLS_RENDER)      ; 3
++	.WORD .LOWORD(BH_AG_HOP_RENDER)      ; 3
 +	.WORD .LOWORD(BH_AG_SWEEPS_RENDER)     ; 4
 +	.WORD .LOWORD(BH_AG_HOLD_RENDER)       ; 5
 +	.WORD .LOWORD(BH_AG_ARROWS_RENDER)     ; 6
@@ -1358,9 +1364,8 @@ index 00000000..3c3f8ecf
 +	LDA BH_AG_STATE + BHAG_D
 +	CMP #2
 +	BCS @horizontal
-+	; vertical bar: segments down the box, holes over the gap
-+	LDA #BH_TYPE_VLINE
-+	JSR BH_AG_SEGMENT_TILE
++	; vertical bar: segments down the box, holes over the gap; the segment that
++	; reaches the instruction line is a thin line so the text stays readable
 +	LDA z:BH_BOX_Y0
 +	CLC
 +	ADC #8
@@ -1378,6 +1383,18 @@ index 00000000..3c3f8ecf
 +	SBC BH_AG_STATE + BHAG_B
 +	CMP BH_AG_STATE + BHAG_Q1
 +	BCC @vnext              ; a hole
++	LDA z:BH_PAT_WAIT
++	CLC
++	ADC #16 + 20
++	CMP z:BH_BOX_Y1
++	BCS @thin
++	LDA #BH_TYPE_VLINE
++	JSR BH_AG_SEGMENT_TILE
++	BRA @vput
++@thin:
++	LDA #BH_TYPE_VLINE
++	JSR BH_TILE_FOR_TYPE
++@vput:
 +	LDA z:BH_LOOP_PC
 +	STA z:BH_T0
 +	LDA z:BH_PAT_WAIT
@@ -1423,418 +1440,255 @@ index 00000000..3c3f8ecf
 +	RTS
 +
 +; ===========================================================================
-+; Shared cell helpers: the box interior as a grid of 16 px cells starting at
-+;   (x0+8, y0+8); BHAG_A = columns, BHAG_B = rows. A row's lit cells are a bit
-+;   mask in BHAG_ARR (one word per row, bit 0 = the left cell).
++; B3 Hop the waves - the heart runs along the floor of the box; waves (the
++;   enemy's shape) sweep along the floor from either side and A hops the
++;   heart over them. p0 speed (1/16 px a frame), p1 frames between waves,
++;   p2 waves. A = height above the floor, B = vertical speed (px a frame,
++;   signed), C = waves still to come, D = the last side, E = frames to the
++;   next wave. Waves live in the bullet table (type, x 12.4, vx).
 +; ===========================================================================
-+BH_AG_GRID_SETUP:
-+	LDA z:BH_BOX_X1
-+	SEC
-+	SBC z:BH_BOX_X0
-+	SEC
-+	SBC #16
-+	LSR
-+	LSR
-+	LSR
-+	LSR
-+	STA BH_AG_STATE + BHAG_A
-+	LDA z:BH_BOX_Y1
-+	SEC
-+	SBC z:BH_BOX_Y0
-+	SEC
-+	SBC #16
-+	LSR
-+	LSR
-+	LSR
-+	LSR
-+	STA BH_AG_STATE + BHAG_B
-+	RTS
-+
-+; the heart's cell: BH_T0 = column, BH_T1 = row (clamped to the grid)
-+BH_AG_HEART_CELL:
-+	LDA z:BH_HEART_X
-+	CLC
-+	ADC #8
-+	SEC
-+	SBC z:BH_BOX_X0
-+	SEC
-+	SBC #8
-+	BPL :+
-+	LDA #0
-+:	LSR
-+	LSR
-+	LSR
-+	LSR
-+	CMP BH_AG_STATE + BHAG_A
-+	BCC :+
-+	LDA BH_AG_STATE + BHAG_A
-+	DEC
-+:	STA z:BH_T0
-+	LDA z:BH_HEART_Y
-+	CLC
-+	ADC #8
-+	SEC
-+	SBC z:BH_BOX_Y0
-+	SEC
-+	SBC #8
-+	BPL :+
-+	LDA #0
-+:	LSR
-+	LSR
-+	LSR
-+	LSR
-+	CMP BH_AG_STATE + BHAG_B
-+	BCC :+
-+	LDA BH_AG_STATE + BHAG_B
-+	DEC
-+:	STA z:BH_T1
-+	RTS
-+
-+; is the heart's cell lit? -> A = 1 / 0
-+BH_AG_HEART_LIT:
-+	JSR BH_AG_HEART_CELL
-+	LDA z:BH_T1
-+	ASL
-+	TAX
-+	LDA BH_AG_STATE + BHAG_ARR,X
-+	STA z:BH_T2
-+	LDX z:BH_T0
-+	LDA #1
-+@shift:
-+	CPX #0
-+	BEQ @test
-+	ASL
-+	DEX
-+	BRA @shift
-+@test:
-+	AND z:BH_T2
-+	BEQ @no
-+	LDA #1
-+	RTS
-+@no:
-+	LDA #0
-+	RTS
-+
-+; draw every lit cell as the block type in BH_T7 (tile scratch resolved inside)
-+BH_AG_DRAW_CELLS:
-+	LDA z:BH_T7
-+	JSR BH_TILE_FOR_TYPE
-+	STZ z:BH_PAT_WAIT       ; row
-+@row:
-+	LDA z:BH_PAT_WAIT
-+	CMP BH_AG_STATE + BHAG_B
-+	BCS @done
-+	ASL
-+	TAX
-+	LDA BH_AG_STATE + BHAG_ARR,X
-+	STA z:BH_LOOP_PC        ; the row's mask
-+	STZ z:BH_LOOP_CNT       ; column
-+@col:
-+	LDA z:BH_LOOP_CNT
-+	CMP BH_AG_STATE + BHAG_A
-+	BCS @next_row
-+	LSR z:BH_LOOP_PC
-+	BCC @next_col
-+	LDA z:BH_LOOP_CNT
-+	ASL
-+	ASL
-+	ASL
-+	ASL
-+	CLC
-+	ADC z:BH_BOX_X0
-+	CLC
-+	ADC #8
-+	STA z:BH_T0
-+	LDA z:BH_PAT_WAIT
-+	ASL
-+	ASL
-+	ASL
-+	ASL
-+	CLC
-+	ADC z:BH_BOX_Y0
-+	CLC
-+	ADC #8
-+	STA z:BH_T1
-+	JSR BH_OAM_PUT
-+@next_col:
-+	INC z:BH_LOOP_CNT
-+	BRA @col
-+@next_row:
-+	INC z:BH_PAT_WAIT
-+	BRA @row
-+@done:
-+	RTS
-+
-+; A = 0..(BHAG_A - 1) -> the row mask bit for that column
-+BH_AG_COL_BIT:              ; A = column -> A = its bit (X preserved: callers loop on X)
-+	PHX
-+	TAX
-+	LDA #1
-+@s:	CPX #0
-+	BEQ @d
-+	ASL
-+	DEX
-+	BRA @s
-+@d:	PLX
-+	RTS
-+
-+; ===========================================================================
-+; B3 Danger cells - cells light up yellow (a warning), then red (a strike);
-+;   the heart must not stand on a red cell. p0 pattern, p1 warn frames,
-+;   p2 waves. STEP: 0 rest, 1 warning, 2 striking; C waves left; E frames left
-+;   in the phase; D = the pattern's running index.
-+; ===========================================================================
-+BH_AG_CELLS_INIT:
++BH_AG_HOP_INIT:
 +	LDA BH_AG_STATE + BHAG_Q2
-+	AND #$00FF
 +	STA BH_AG_STATE + BHAG_C
-+	STZ BH_AG_STATE + BHAG_D
 +	LDA #30
 +	STA BH_AG_STATE + BHAG_E
-+	LDA #600
++	LDA #900
 +	STA BH_AG_STATE + BHAG_TIMER
++	JSL RAND
++	AND #1
++	STA BH_AG_STATE + BHAG_D
++	LDA #176
++	STA z:BH_T0
++	LDA #88                 ; room for the hop
++	STA z:BH_T1
 +	LDA #1
 +	RTS
 +
-+BH_AG_CELLS_UPDATE:
-+	JSR BH_INPUT
++; the floor: the heart's y while grounded (its bottom just above the instruction line)
++BH_AG_HOP_FLOOR:
++	LDA z:BH_BOX_Y1
++	SEC
++	SBC #34
++	RTS
++
++BH_AG_HOP_UPDATE:
++	JSR BH_INPUT            ; left and right; up and down are undone below
 +	LDA BH_AG_STATE + BHAG_A
-+	BNE :+
-+	JSR BH_AG_GRID_SETUP    ; first frame in the box
-+:	LDA BH_AG_STATE + BHAG_TIMER
++	BNE @airborne
++	LDA PAD_PRESS
++	AND #PAD::A_BUTTON
++	BEQ @grounded
++	LDA #9                  ; 45 px high, 18 frames in the air
++	STA BH_AG_STATE + BHAG_B
++	LDA #SFX::CURSOR3
++	JSR BH_MG_SOUND
++@airborne:
++	LDA BH_AG_STATE + BHAG_A
++	CLC
++	ADC BH_AG_STATE + BHAG_B
++	BPL :+
++	LDA #0
++:	STA BH_AG_STATE + BHAG_A
++	DEC BH_AG_STATE + BHAG_B
++@grounded:
++	JSR BH_AG_HOP_FLOOR
++	SEC
++	SBC BH_AG_STATE + BHAG_A
++	STA z:BH_HEART_Y
++	LDA BH_AG_STATE + BHAG_TIMER
 +	BNE :+
 +	JMP BH_AG_RESOLVE_BY_HITS
 +:	LDA BH_AG_STATE + BHAG_E
-+	BEQ @phase_over
++	BEQ @spawn
 +	DEC BH_AG_STATE + BHAG_E
-+	LDA BH_AG_STATE + BHAG_STEP
-+	CMP #2
-+	BNE @done
-+	JSR BH_AG_HEART_LIT     ; standing on a striking cell
-+	BNE @struck
++	BRA @move
++@spawn:
++	LDA BH_AG_STATE + BHAG_C
++	BEQ @move
++	DEC BH_AG_STATE + BHAG_C
++	LDA BH_AG_STATE + BHAG_Q1
++	STA BH_AG_STATE + BHAG_E
++	JSR BH_AG_HOP_SPAWN
++@move:
++	STZ z:BH_T6             ; waves still on the floor
++	LDX #0
++@wave:
++	LDA BH_BULLETS + BHB_TYPE,X
++	AND #$00FF
++	BEQ @next
++	INC z:BH_T6
++	LDA BH_BULLETS + BHB_X,X
++	CLC
++	ADC BH_BULLETS + BHB_VX,X
++	STA BH_BULLETS + BHB_X,X
++	JSR BH_ASR4
++	STA z:BH_T0
++	CLC
++	ADC #16
++	CMP z:BH_BOX_X0
++	BCC @gone
++	LDA z:BH_T0
++	CMP z:BH_BOX_X1
++	BCS @gone
++	; under a heart that is not high enough? (8 px each way: a clean hop clears it)
++	LDA BH_AG_STATE + BHAG_A
++	CMP #10
++	BCS @next
++	LDA z:BH_T0
++	SEC
++	SBC z:BH_HEART_X
++	JSR BH_ABS
++	CMP #8
++	BCS @second
++	JSR BH_AG_HIT
++	BRA @next
++@second:
 +	LDA BH_AG_STATE + BHAG_AMOD
 +	CMP #BH_BLK_TWO
++	BNE @next
++	LDA z:BH_T0
++	SEC
++	SBC BH_AG_STATE + BHAG_H2X
++	JSR BH_ABS
++	CMP #8
++	BCS @next
++	JSR BH_AG_HIT
++	BRA @next
++@gone:
++	STZ BH_BULLETS + BHB_TYPE,X
++	DEC z:BH_T6
++@next:
++	TXA
++	CLC
++	ADC #BH_BULLET_SIZE
++	TAX
++	CPX #BH_MAX_BULLETS * BH_BULLET_SIZE
++	BCC @wave
++	LDA BH_AG_STATE + BHAG_C
 +	BNE @done
-+	JSR BH_AG_SWAP_HEARTS   ; the second heart too
-+	JSR BH_AG_HEART_LIT
-+	PHP
-+	JSR BH_AG_SWAP_HEARTS
-+	PLP
-+	BEQ @done
-+@struck:
-+	JMP BH_AG_HIT
++	LDA z:BH_T6
++	BNE @done
++	JMP BH_AG_RESOLVE_BY_HITS   ; every wave has passed
 +@done:
 +	RTS
-+@phase_over:
-+	LDA BH_AG_STATE + BHAG_STEP
-+	BEQ @rest_over
-+	CMP #1
-+	BEQ @warn_over
-+	; strike over: clear the cells, rest
-+	STZ BH_AG_STATE + BHAG_STEP
-+	STZ BH_AG_STATE + BHAG_ARR
-+	STZ BH_AG_STATE + BHAG_ARR + 2
-+	STZ BH_AG_STATE + BHAG_ARR + 4
-+	STZ BH_AG_STATE + BHAG_ARR + 6
-+	LDA #24
-+	STA BH_AG_STATE + BHAG_E
-+	RTS
-+@warn_over:
-+	LDA #2
-+	STA BH_AG_STATE + BHAG_STEP
-+	LDA #14
-+	STA BH_AG_STATE + BHAG_E
-+	RTS
-+@rest_over:
-+	LDA BH_AG_STATE + BHAG_C
-+	BNE @wave
-+	JMP BH_AG_RESOLVE_BY_HITS
-+@wave:
-+	DEC BH_AG_STATE + BHAG_C
-+	JSR BH_AG_CELLS_LIGHT
-+	LDA #1
-+	STA BH_AG_STATE + BHAG_STEP
-+	LDA BH_AG_STATE + BHAG_Q1
-+	AND #$00FF
-+	STA BH_AG_STATE + BHAG_E
-+	RTS
 +
-+; light the wave's cells by pattern p0: 0 a row, 1 a column, 2/3 checkerboards,
-+; 4 the heart's row and column, 5 the edges, 6 a diagonal band, 7 random half
-+BH_AG_CELLS_LIGHT:
-+	LDA BH_AG_STATE + BHAG_D
-+	INC
-+	STA BH_AG_STATE + BHAG_D
-+	LDA BH_AG_STATE + BHAG_Q0
++; a new wave from the side opposite the last one
++BH_AG_HOP_SPAWN:
++	LDX #0
++@find:
++	LDA BH_BULLETS + BHB_TYPE,X
 +	AND #$00FF
-+	CMP #8
-+	BCC :+
-+	LDA #7
-+:	ASL
-+	TAX
-+	JMP (.LOWORD(@table),X)
-+@table:
-+	.WORD .LOWORD(@rows), .LOWORD(@cols), .LOWORD(@checker), .LOWORD(@checker2)
-+	.WORD .LOWORD(@cross), .LOWORD(@edges), .LOWORD(@diag), .LOWORD(@random)
-+@rows:
-+	LDA #$FFFF
-+	STA z:BH_T3
-+	LDA BH_AG_STATE + BHAG_D
-+	DEC
-+	JSR @mod_rows
-+	JMP @set_row_mask       ; that row fully lit
-+@cols:
-+	LDA BH_AG_STATE + BHAG_D
-+	DEC
-+	JSR @mod_cols
-+	JSR BH_AG_COL_BIT
-+	STA z:BH_T3
-+	JMP @all_rows_mask
-+@checker2:
-+	LDA #$AAAA
-+	BRA @check_go
-+@checker:
-+	LDA #$5555
-+@check_go:
-+	STA z:BH_T3
-+	LDA BH_AG_STATE + BHAG_D
-+	AND #$0001
-+	BEQ @check_rows
-+	LDA z:BH_T3
-+	ASL
-+	STA z:BH_T3
-+@check_rows:
-+	; alternate rows shift the mask by one
-+	LDX #0
-+@ck:
-+	LDA z:BH_T3
-+	STA BH_AG_STATE + BHAG_ARR,X
-+	LSR z:BH_T3
-+	INX
-+	INX
-+	CPX #8
-+	BCC @ck
-+	RTS
-+@cross:
-+	JSR BH_AG_HEART_CELL
-+	LDA z:BH_T0
-+	JSR BH_AG_COL_BIT
-+	STA z:BH_T3
-+	JSR @all_rows_mask
-+	LDA #$FFFF
-+	STA z:BH_T3
-+	LDA z:BH_T1
-+	JMP @set_row_mask
-+@edges:
-+	LDA BH_AG_STATE + BHAG_D
-+	AND #$0001
-+	BNE @middle
-+	LDA #$FFFF
-+	STA z:BH_T3
-+	LDA #0
-+	JSR @set_row_mask
-+	LDA BH_AG_STATE + BHAG_B
-+	DEC
-+	JSR @set_row_mask
-+	LDA #1
-+	STA z:BH_T3
-+	JSR @all_rows_mask
-+	LDA BH_AG_STATE + BHAG_A
-+	DEC
-+	JSR BH_AG_COL_BIT
-+	STA z:BH_T3
-+	JMP @all_rows_mask
-+@middle:
-+	LDA #$FFFF
-+	STA z:BH_T3
-+	LDA #1
-+	JSR @set_row_mask
-+	LDA #2
-+	JMP @set_row_mask
-+@diag:
-+	; cells where column - row == D (mod columns), two wide
-+	LDX #0
-+@dg:
++	BEQ @free
 +	TXA
-+	LSR
-+	STA z:BH_T4             ; row
-+	LDA BH_AG_STATE + BHAG_D
 +	CLC
-+	ADC z:BH_T4
-+	JSR @mod_cols
-+	JSR BH_AG_COL_BIT
-+	STA z:BH_T3
-+	ASL
-+	ORA z:BH_T3
-+	STA BH_AG_STATE + BHAG_ARR,X
-+	INX
-+	INX
-+	CPX #8
-+	BCC @dg
-+	RTS
-+@random:
-+	LDX #0
-+@rn:
-+	JSL RAND
-+	AND #$0555
-+	STA z:BH_T3
-+	JSL RAND
-+	AND #$0A0A
-+	ORA z:BH_T3
-+	STA BH_AG_STATE + BHAG_ARR,X
-+	INX
-+	INX
-+	CPX #8
-+	BCC @rn
-+	RTS
-+@set_row_mask:              ; A = row, BH_T3 = mask
-+	ASL
++	ADC #BH_BULLET_SIZE
 +	TAX
-+	LDA z:BH_T3
-+	STA BH_AG_STATE + BHAG_ARR,X
++	CPX #BH_MAX_BULLETS * BH_BULLET_SIZE
++	BCC @find
 +	RTS
-+@all_rows_mask:             ; BH_T3 ORed into every row
-+	LDX #0
-+@ar:
-+	LDA BH_AG_STATE + BHAG_ARR,X
-+	ORA z:BH_T3
-+	STA BH_AG_STATE + BHAG_ARR,X
-+	INX
-+	INX
-+	CPX #8
-+	BCC @ar
-+	RTS
-+@mod_rows:                  ; A mod rows
-+	CMP BH_AG_STATE + BHAG_B
-+	BCC :+
++@free:
++	LDA BH_AG_STATE + BHAG_D
++	EOR #1
++	STA BH_AG_STATE + BHAG_D
++	BNE @from_right
++	LDA z:BH_BOX_X0
 +	SEC
-+	SBC BH_AG_STATE + BHAG_B
-+	BRA @mod_rows
-+:	RTS
-+@mod_cols:
-+	CMP BH_AG_STATE + BHAG_A
-+	BCC :+
++	SBC #8
++	ASL
++	ASL
++	ASL
++	ASL
++	STA BH_BULLETS + BHB_X,X
++	LDA BH_AG_STATE + BHAG_Q0
++	STA BH_BULLETS + BHB_VX,X
++	BRA @type
++@from_right:
++	LDA z:BH_BOX_X1
 +	SEC
-+	SBC BH_AG_STATE + BHAG_A
-+	BRA @mod_cols
-+:	RTS
++	SBC #8
++	ASL
++	ASL
++	ASL
++	ASL
++	STA BH_BULLETS + BHB_X,X
++	LDA BH_AG_STATE + BHAG_Q0
++	EOR #$FFFF
++	INC
++	STA BH_BULLETS + BHB_VX,X
++@type:
++	STZ BH_BULLETS + BHB_VY,X
++	LDA #BH_TYPE_ROUND
++	LDY z:BH_THEME_TILE
++	CPY #$FFFF
++	BEQ :+
++	LDA #BH_TYPE_THEME0
++:	STA BH_BULLETS + BHB_TYPE,X
++	LDA #SFX::CURSOR1
++	JMP BH_MG_SOUND
 +
-+BH_AG_CELLS_RENDER:
-+	LDA BH_AG_STATE + BHAG_STEP
-+	BEQ @heart
-+	CMP #2
-+	BEQ @red
-+	LDA z:BH_FRAME
-+	AND #$0004
-+	BNE @heart              ; the warning blinks
-+	LDA #BH_TYPE_GAUGE_YEL
-+	BRA @cells
-+@red:
-+	LDA #BH_TYPE_GAUGE_RED
-+@cells:
-+	STA z:BH_T7
-+	JSR BH_AG_DRAW_CELLS
-+@heart:
++BH_AG_HOP_RENDER:
++	; the floor line, right above the instruction line
++	LDA #BH_TYPE_HLINE16
++	JSR BH_TILE_FOR_TYPE
++	LDA z:BH_BOX_X0
++	CLC
++	ADC #BH_FRAME_LEFT
++	STA z:BH_T5
++@seg:
++	LDA z:BH_T5
++	STA z:BH_T0
++	LDA z:BH_BOX_Y1
++	SEC
++	SBC #20
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	LDA z:BH_T5
++	CLC
++	ADC #16
++	STA z:BH_T5
++	CLC
++	ADC #BH_FRAME_RIGHT
++	CMP z:BH_BOX_X1
++	BCC @seg
++	; the waves
++	LDX #0
++@wave:
++	LDA BH_BULLETS + BHB_TYPE,X
++	AND #$00FF
++	BEQ @next
++	STX z:BH_T6
++	JSR BH_TILE_FOR_TYPE
++	LDX z:BH_T6
++	LDA BH_BULLETS + BHB_X,X
++	JSR BH_ASR4
++	STA z:BH_T0
++	JSR BH_AG_HOP_FLOOR
++	STA z:BH_T1
++	JSR BH_OAM_PUT
++	LDX z:BH_T6
++@next:
++	TXA
++	CLC
++	ADC #BH_BULLET_SIZE
++	TAX
++	CPX #BH_MAX_BULLETS * BH_BULLET_SIZE
++	BCC @wave
++	; the A button in the top right corner, ringed while lit
++	LDA z:BH_BOX_X1
++	SEC
++	SBC #BH_FRAME_RIGHT + 18
++	STA z:BH_T0
++	LDA z:BH_BOX_Y0
++	CLC
++	ADC #BH_FRAME_TOP + 2
++	STA z:BH_T1
++	LDA z:BH_MG_PRESS
++	CMP #$0100
++	BCC :+
++	JSR BH_DRAW_PRESS_RING
++:	LDA #BH_TYPE_BUTTON_A
++	JSR BH_TILE_FOR_TYPE
++	JSR BH_OAM_PUT
 +	JMP BH_AG_DRAW_HEART
 +
 +; ===========================================================================
@@ -2298,12 +2152,12 @@ index 00000000..3c3f8ecf
 +	ASL
 +	ASL
 +	STA BH_BULLETS + BHB_X,X
-+	; y: a random row inside the frame
++	; y: a random row inside the frame, above the instruction line
 +	LDA z:BH_BOX_Y1
 +	SEC
 +	SBC z:BH_BOX_Y0
 +	SEC
-+	SBC #32
++	SBC #44
 +	STA z:BH_T7
 +	PHX
 +	JSR BH_AG_RAND_BELOW
@@ -4516,7 +4370,7 @@ index 00000000..3c3f8ecf
 +	JMP BH_AG_DRAW_HEART
 diff --git a/src/battle/bullet_hell/bh_attack_games.asm b/src/battle/bullet_hell/bh_attack_games.asm
 new file mode 100644
-index 00000000..547d176f
+index 00000000..286f5623
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_attack_games.asm
 @@ -0,0 +1,2179 @@
@@ -4758,14 +4612,14 @@ index 00000000..547d176f
 +BH_AG_DATA:
 +	.BYTE 2   ; enemy 1
 +	.WORD 215
-+	.BYTE 3, 0, 6, 24, 4, 0, 7   ; PAINT_ATTACK
++	.BYTE 3, 0, 28, 60, 4, 0, 7   ; PAINT_ATTACK
 +	.WORD 62
 +	.BYTE 13, 0, 3, 28, 0, 0, 13   ; CALL_FOR_HELP
 +	.BYTE 5   ; enemy 2
 +	.WORD 18
 +	.BYTE 1, 9, 0, 0, 0, 1, 21   ; PSI_FREEZE_ALPHA
 +	.WORD 14
-+	.BYTE 3, 0, 3, 16, 4, 0, 7   ; PSI_FIRE_ALPHA
++	.BYTE 3, 0, 32, 44, 4, 0, 7   ; PSI_FIRE_ALPHA
 +	.WORD 32
 +	.BYTE 10, 0, 3, 6, 16, 0, 11   ; PSI_LIFEUP_ALPHA
 +	.WORD 55
@@ -4774,7 +4628,7 @@ index 00000000..547d176f
 +	.BYTE 1, 7, 0, 0, 0, 0, 19   ; PSI_BRAINSHOCK_ALPHA
 +	.BYTE 2   ; enemy 3
 +	.WORD 4
-+	.BYTE 3, 0, 3, 16, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 32, 44, 5, 0, 7   ; BASH
 +	.WORD 95
 +	.BYTE 14, 0, 4, 0, 8, 0, 14   ; SPIN_SOMETHING
 +	.BYTE 2   ; enemy 4
@@ -4805,7 +4659,7 @@ index 00000000..547d176f
 +	.BYTE 1, 17, 0, 0, 0, 60, 23   ; SCATTER_SPORES
 +	.BYTE 3   ; enemy 8
 +	.WORD 75
-+	.BYTE 3, 0, 4, 12, 3, 0, 7   ; SCATTER_SPORES
++	.BYTE 3, 0, 20, 36, 3, 0, 7   ; SCATTER_SPORES
 +	.WORD 4
 +	.BYTE 14, 17, 6, 0, 6, 60, 14   ; BASH
 +	.WORD 237
@@ -4816,7 +4670,7 @@ index 00000000..547d176f
 +	.WORD 54
 +	.BYTE 12, 0, 32, 2, 210, 0, 12   ; PSI_MAGNET_ALPHA
 +	.WORD 63
-+	.BYTE 3, 0, 6, 12, 4, 0, 7   ; SOW_SEEDS
++	.BYTE 3, 0, 28, 36, 4, 0, 7   ; SOW_SEEDS
 +	.WORD 32
 +	.BYTE 5, 0, 2, 14, 60, 0, 9   ; PSI_LIFEUP_ALPHA
 +	.BYTE 4   ; enemy 10
@@ -4827,7 +4681,7 @@ index 00000000..547d176f
 +	.WORD 54
 +	.BYTE 1, 8, 0, 0, 0, 50, 20   ; PSI_MAGNET_ALPHA
 +	.WORD 32
-+	.BYTE 3, 0, 0, 20, 5, 0, 7   ; PSI_LIFEUP_ALPHA
++	.BYTE 3, 0, 20, 52, 5, 0, 7   ; PSI_LIFEUP_ALPHA
 +	.BYTE 2   ; enemy 11
 +	.WORD 118
 +	.BYTE 4, 0, 5, 32, 5, 0, 8   ; SPRAY_WATER_BLAST
@@ -4853,16 +4707,16 @@ index 00000000..547d176f
 +	.WORD 222
 +	.BYTE 4, 0, 3, 48, 4, 0, 8   ; FIRE_BEAM
 +	.WORD 64
-+	.BYTE 3, 0, 4, 12, 4, 0, 7   ; EXPLODE
++	.BYTE 3, 0, 20, 36, 4, 0, 7   ; EXPLODE
 +	.BYTE 4   ; enemy 15
 +	.WORD 213
 +	.BYTE 1, 11, 0, 0, 0, 56, 22   ; COUGH
 +	.WORD 22
-+	.BYTE 3, 0, 1, 20, 3, 0, 7   ; PSI_THUNDER_ALPHA
++	.BYTE 3, 0, 24, 52, 3, 0, 7   ; PSI_THUNDER_ALPHA
 +	.WORD 26
 +	.BYTE 5, 17, 4, 14, 70, 90, 9   ; PSI_FLASH_ALPHA
 +	.WORD 23
-+	.BYTE 3, 0, 5, 24, 4, 0, 7   ; PSI_THUNDER_BETA
++	.BYTE 3, 0, 24, 60, 4, 0, 7   ; PSI_THUNDER_BETA
 +	.BYTE 3   ; enemy 16
 +	.WORD 238
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BITING_ATTACK
@@ -4902,7 +4756,7 @@ index 00000000..547d176f
 +	.BYTE 15, 0, 3, 24, 0, 0, 15   ; POSSESS
 +	.BYTE 5   ; enemy 21
 +	.WORD 10
-+	.BYTE 3, 17, 6, 20, 3, 120, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 17, 28, 52, 3, 120, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 201
 +	.BYTE 1, 11, 0, 0, 0, 40, 22   ; GLORIOUS_LIGHT
 +	.WORD 41
@@ -4910,7 +4764,7 @@ index 00000000..547d176f
 +	.WORD 33
 +	.BYTE 18, 0, 3, 32, 1, 0, 17   ; PSI_LIFEUP_BETA
 +	.WORD 13
-+	.BYTE 3, 20, 3, 20, 4, 0, 7   ; PSI_ROCKIN_OMEGA
++	.BYTE 3, 20, 32, 52, 4, 0, 7   ; PSI_ROCKIN_OMEGA
 +	.BYTE 2   ; enemy 22
 +	.WORD 4
 +	.BYTE 4, 0, 2, 32, 5, 0, 8   ; BASH
@@ -4937,7 +4791,7 @@ index 00000000..547d176f
 +	.BYTE 4, 0, 4, 32, 5, 0, 8   ; TOOTHBRUSH
 +	.BYTE 4   ; enemy 26
 +	.WORD 92
-+	.BYTE 3, 0, 6, 12, 3, 0, 7   ; CRASHING_BOOM_BANG
++	.BYTE 3, 0, 28, 36, 3, 0, 7   ; CRASHING_BOOM_BANG
 +	.WORD 32
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; PSI_LIFEUP_ALPHA
 +	.WORD 215
@@ -4948,7 +4802,7 @@ index 00000000..547d176f
 +	.WORD 104
 +	.BYTE 5, 0, 2, 14, 60, 0, 9   ; SPEW_FIREBALL
 +	.WORD 238
-+	.BYTE 3, 0, 3, 24, 5, 0, 7   ; BITING_ATTACK
++	.BYTE 3, 0, 32, 60, 5, 0, 7   ; BITING_ATTACK
 +	.WORD 93
 +	.BYTE 4, 0, 0, 48, 3, 0, 8   ; FIRE_SPRAY
 +	.WORD 226
@@ -4964,12 +4818,12 @@ index 00000000..547d176f
 +	.WORD 112
 +	.BYTE 14, 0, 4, 0, 6, 0, 14   ; CLAW
 +	.WORD 111
-+	.BYTE 3, 0, 7, 24, 5, 0, 7   ; BITE
++	.BYTE 3, 0, 32, 60, 5, 0, 7   ; BITE
 +	.WORD 4
-+	.BYTE 3, 0, 5, 20, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 52, 4, 0, 7   ; BASH
 +	.BYTE 2   ; enemy 30
 +	.WORD 78
-+	.BYTE 3, 0, 5, 12, 4, 0, 7   ; MOLD_SPORES
++	.BYTE 3, 0, 24, 36, 4, 0, 7   ; MOLD_SPORES
 +	.WORD 4
 +	.BYTE 4, 0, 4, 48, 5, 0, 8   ; BASH
 +	.BYTE 2   ; enemy 31
@@ -4997,13 +4851,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 0, 12, 5, 49, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 20, 36, 5, 49, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 2, 20, 4, 50, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 28, 52, 4, 50, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 5, 12, 3, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 36, 3, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 2, 12, 5, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 28, 36, 5, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 10, 2, 40, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -5020,18 +4874,18 @@ index 00000000..547d176f
 +	.BYTE 16, 7, 3, 18, 2, 0, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA_UNSTABLE
 +	.BYTE 4   ; enemy 35
 +	.WORD 224
-+	.BYTE 3, 0, 1, 12, 3, 0, 7   ; STOMP
++	.BYTE 3, 0, 24, 36, 3, 0, 7   ; STOMP
 +	.WORD 113
 +	.BYTE 4, 0, 2, 48, 5, 0, 8   ; SWING_TAIL
 +	.WORD 111
-+	.BYTE 3, 0, 1, 24, 5, 0, 7   ; BITE
++	.BYTE 3, 0, 24, 60, 5, 0, 7   ; BITE
 +	.WORD 211
 +	.BYTE 1, 17, 0, 0, 0, 60, 23   ; LOUD_RUMBLE
 +	.BYTE 5   ; enemy 36
 +	.WORD 14
 +	.BYTE 4, 0, 2, 32, 5, 0, 8   ; PSI_FIRE_ALPHA
 +	.WORD 15
-+	.BYTE 3, 0, 3, 24, 3, 0, 7   ; PSI_FIRE_BETA
++	.BYTE 3, 0, 32, 60, 3, 0, 7   ; PSI_FIRE_BETA
 +	.WORD 113
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; SWING_TAIL
 +	.WORD 224
@@ -5053,11 +4907,11 @@ index 00000000..547d176f
 +	.WORD 54
 +	.BYTE 10, 0, 2, 6, 12, 0, 11   ; PSI_MAGNET_ALPHA
 +	.WORD 72
-+	.BYTE 3, 0, 1, 12, 3, 0, 7   ; POISON_STING
++	.BYTE 3, 0, 24, 36, 3, 0, 7   ; POISON_STING
 +	.WORD 238
 +	.BYTE 15, 0, 3, 24, 2, 0, 15   ; BITING_ATTACK
 +	.WORD 56
-+	.BYTE 3, 0, 1, 16, 5, 0, 7   ; PSI_PARALYSIS_ALPHA
++	.BYTE 3, 0, 24, 44, 5, 0, 7   ; PSI_PARALYSIS_ALPHA
 +	.WORD 62
 +	.BYTE 18, 0, 5, 26, 1, 0, 17   ; CALL_FOR_HELP
 +	.BYTE 5   ; enemy 39
@@ -5068,12 +4922,12 @@ index 00000000..547d176f
 +	.WORD 237
 +	.BYTE 1, 8, 0, 0, 0, 51, 20   ; SCATTER_SPORES_2
 +	.WORD 4
-+	.BYTE 3, 0, 7, 20, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 32, 52, 5, 0, 7   ; BASH
 +	.WORD 85
 +	.BYTE 1, 7, 0, 0, 0, 1, 19   ; DISRUPT_SENSES
 +	.BYTE 3   ; enemy 40
 +	.WORD 100
-+	.BYTE 3, 0, 5, 12, 4, 0, 7   ; POISONOUS_BITE
++	.BYTE 3, 0, 24, 36, 4, 0, 7   ; POISONOUS_BITE
 +	.WORD 111
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BITE
 +	.WORD 4
@@ -5082,7 +4936,7 @@ index 00000000..547d176f
 +	.WORD 32
 +	.BYTE 16, 0, 3, 14, 2, 0, 16   ; PSI_LIFEUP_ALPHA
 +	.WORD 110
-+	.BYTE 3, 0, 0, 24, 3, 0, 7   ; TEAR_INTO
++	.BYTE 3, 0, 20, 60, 3, 0, 7   ; TEAR_INTO
 +	.WORD 4
 +	.BYTE 4, 0, 2, 48, 4, 0, 8   ; BASH
 +	.WORD 44
@@ -5093,18 +4947,18 @@ index 00000000..547d176f
 +	.BYTE 4, 0, 0, 32, 5, 0, 8   ; CLAW
 +	.BYTE 5   ; enemy 42
 +	.WORD 112
-+	.BYTE 3, 0, 4, 24, 4, 0, 7   ; CLAW
++	.BYTE 3, 0, 20, 60, 4, 0, 7   ; CLAW
 +	.WORD 4
 +	.BYTE 1, 11, 0, 0, 0, 48, 22   ; BASH
 +	.WORD 41
 +	.BYTE 14, 0, 6, 0, 8, 0, 14   ; PSI_SHIELD_BETA
 +	.WORD 110
-+	.BYTE 3, 0, 6, 12, 5, 0, 7   ; TEAR_INTO
++	.BYTE 3, 0, 28, 36, 5, 0, 7   ; TEAR_INTO
 +	.WORD 32
 +	.BYTE 10, 0, 2, 4, 12, 0, 11   ; PSI_LIFEUP_ALPHA
 +	.BYTE 1   ; enemy 43
 +	.WORD 89
-+	.BYTE 3, 9, 2, 24, 3, 2, 7   ; HOT_ESPRESSO
++	.BYTE 3, 9, 28, 60, 3, 2, 7   ; HOT_ESPRESSO
 +	.BYTE 1   ; enemy 44
 +	.WORD 62
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; CALL_FOR_HELP
@@ -5116,7 +4970,7 @@ index 00000000..547d176f
 +	.WORD 80
 +	.BYTE 12, 0, 24, 1, 180, 0, 12   ; STICKY_MUCUS
 +	.WORD 4
-+	.BYTE 3, 0, 1, 16, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 44, 4, 0, 7   ; BASH
 +	.BYTE 4   ; enemy 46
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
@@ -5130,7 +4984,7 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 82
-+	.BYTE 3, 0, 4, 16, 4, 0, 7   ; SPIDER_SILK
++	.BYTE 3, 0, 20, 44, 4, 0, 7   ; SPIDER_SILK
 +	.WORD 72
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; POISON_STING
 +	.BYTE 3   ; enemy 48
@@ -5155,7 +5009,7 @@ index 00000000..547d176f
 +	.WORD 117
 +	.BYTE 1, 8, 0, 0, 0, 18, 20   ; GENERATE_TORNADO
 +	.WORD 92
-+	.BYTE 3, 0, 0, 24, 3, 0, 7   ; CRASHING_BOOM_BANG
++	.BYTE 3, 0, 20, 60, 3, 0, 7   ; CRASHING_BOOM_BANG
 +	.WORD 94
 +	.BYTE 4, 0, 0, 32, 4, 0, 8   ; FIRE_BREATH
 +	.WORD 248
@@ -5185,7 +5039,7 @@ index 00000000..547d176f
 +	.BYTE 14, 0, 4, 0, 8, 0, 14   ; PSI_SHIELD_BETA
 +	.BYTE 2   ; enemy 54
 +	.WORD 106
-+	.BYTE 3, 0, 6, 24, 5, 0, 7   ; CRUSHING_CHOP
++	.BYTE 3, 0, 28, 60, 5, 0, 7   ; CRUSHING_CHOP
 +	.WORD 4
 +	.BYTE 14, 0, 7, 0, 8, 0, 14   ; BASH
 +	.BYTE 2   ; enemy 55
@@ -5220,7 +5074,7 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; BASH
 +	.WORD 232
-+	.BYTE 3, 9, 0, 24, 5, 2, 7   ; VENT_ODOR
++	.BYTE 3, 9, 20, 60, 5, 2, 7   ; VENT_ODOR
 +	.WORD 209
 +	.BYTE 16, 0, 3, 10, 2, 0, 16   ; LEAP_FORWARD_AND_SPREAD_WINGS
 +	.BYTE 3   ; enemy 60
@@ -5239,14 +5093,14 @@ index 00000000..547d176f
 +	.BYTE 6, 7, 4, 10, 0, 0, 10   ; PSI_HYPNOSIS_ALPHA
 +	.BYTE 3   ; enemy 62
 +	.WORD 222
-+	.BYTE 3, 0, 3, 12, 5, 0, 7   ; FIRE_BEAM
++	.BYTE 3, 0, 32, 36, 5, 0, 7   ; FIRE_BEAM
 +	.WORD 44
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; PSI_PSI_SHIELD_ALPHA
 +	.WORD 26
 +	.BYTE 4, 0, 2, 32, 4, 0, 8   ; PSI_FLASH_ALPHA
 +	.BYTE 3   ; enemy 63
 +	.WORD 222
-+	.BYTE 3, 0, 3, 16, 3, 0, 7   ; FIRE_BEAM
++	.BYTE 3, 0, 32, 44, 3, 0, 7   ; FIRE_BEAM
 +	.WORD 45
 +	.BYTE 12, 0, 24, 1, 150, 0, 12   ; PSI_PSI_SHIELD_BETA
 +	.WORD 27
@@ -5262,16 +5116,16 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 4, 0, 3, 48, 3, 0, 8   ; BASH
 +	.WORD 72
-+	.BYTE 3, 0, 1, 12, 4, 0, 7   ; POISON_STING
++	.BYTE 3, 0, 24, 36, 4, 0, 7   ; POISON_STING
 +	.WORD 22
 +	.BYTE 4, 0, 1, 48, 5, 0, 8   ; PSI_THUNDER_ALPHA
 +	.BYTE 4   ; enemy 66
 +	.WORD 72
-+	.BYTE 3, 17, 1, 20, 4, 60, 7   ; POISON_STING
++	.BYTE 3, 17, 24, 52, 4, 60, 7   ; POISON_STING
 +	.WORD 4
 +	.BYTE 4, 0, 0, 48, 3, 0, 8   ; BASH
 +	.WORD 22
-+	.BYTE 3, 0, 6, 24, 4, 0, 7   ; PSI_THUNDER_ALPHA
++	.BYTE 3, 0, 28, 60, 4, 0, 7   ; PSI_THUNDER_ALPHA
 +	.WORD 23
 +	.BYTE 16, 0, 5, 10, 2, 0, 16   ; PSI_THUNDER_BETA
 +	.BYTE 4   ; enemy 67
@@ -5301,7 +5155,7 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 4, 0, 2, 48, 3, 0, 8   ; BASH
 +	.WORD 14
-+	.BYTE 3, 0, 3, 20, 5, 0, 7   ; PSI_FIRE_ALPHA
++	.BYTE 3, 0, 32, 52, 5, 0, 7   ; PSI_FIRE_ALPHA
 +	.WORD 207
 +	.BYTE 1, 7, 0, 0, 0, 0, 19   ; LAUGH_MANIACALLY
 +	.WORD 64
@@ -5310,7 +5164,7 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 14
-+	.BYTE 3, 0, 5, 12, 4, 0, 7   ; PSI_FIRE_ALPHA
++	.BYTE 3, 0, 24, 36, 4, 0, 7   ; PSI_FIRE_ALPHA
 +	.WORD 15
 +	.BYTE 4, 0, 1, 32, 4, 0, 8   ; PSI_FIRE_BETA
 +	.WORD 207
@@ -5339,7 +5193,7 @@ index 00000000..547d176f
 +	.WORD 222
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; FIRE_BEAM
 +	.WORD 30
-+	.BYTE 3, 0, 7, 16, 3, 0, 7   ; PSI_STARSTORM_ALPHA
++	.BYTE 3, 0, 32, 44, 3, 0, 7   ; PSI_STARSTORM_ALPHA
 +	.WORD 62
 +	.BYTE 16, 0, 3, 18, 2, 0, 16   ; CALL_FOR_HELP
 +	.WORD 45
@@ -5350,7 +5204,7 @@ index 00000000..547d176f
 +	.WORD 59
 +	.BYTE 1, 7, 0, 0, 0, 1, 19   ; PSI_BRAINSHOCK_OMEGA
 +	.WORD 30
-+	.BYTE 3, 0, 4, 24, 4, 0, 7   ; PSI_STARSTORM_ALPHA
++	.BYTE 3, 0, 20, 60, 4, 0, 7   ; PSI_STARSTORM_ALPHA
 +	.WORD 31
 +	.BYTE 1, 9, 0, 0, 0, 1, 21   ; PSI_STARSTORM_OMEGA
 +	.WORD 39
@@ -5359,7 +5213,7 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 14, 0, 7, 0, 8, 0, 14   ; BASH
 +	.WORD 74
-+	.BYTE 3, 8, 0, 16, 3, 16, 7   ; COLD_BREATH
++	.BYTE 3, 8, 20, 44, 3, 16, 7   ; COLD_BREATH
 +	.WORD 84
 +	.BYTE 1, 7, 0, 0, 0, 0, 19   ; SOMETHING_MYSTERIOUS
 +	.BYTE 4   ; enemy 77
@@ -5398,16 +5252,16 @@ index 00000000..547d176f
 +	.WORD 98
 +	.BYTE 14, 0, 4, 0, 6, 0, 14   ; VACUUM_ATTACK
 +	.WORD 65
-+	.BYTE 3, 0, 1, 12, 4, 0, 7   ; BURST_INTO_FLAMES
++	.BYTE 3, 0, 24, 36, 4, 0, 7   ; BURST_INTO_FLAMES
 +	.BYTE 4   ; enemy 82
 +	.WORD 4
-+	.BYTE 3, 0, 5, 20, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 52, 4, 0, 7   ; BASH
 +	.WORD 58
 +	.BYTE 1, 7, 0, 0, 0, 1, 19   ; PSI_BRAINSHOCK_ALPHA
 +	.WORD 54
 +	.BYTE 10, 0, 2, 7, 20, 0, 11   ; PSI_MAGNET_ALPHA
 +	.WORD 65
-+	.BYTE 3, 9, 4, 20, 3, 2, 7   ; BURST_INTO_FLAMES
++	.BYTE 3, 9, 20, 52, 3, 2, 7   ; BURST_INTO_FLAMES
 +	.BYTE 5   ; enemy 83
 +	.WORD 238
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BITING_ATTACK
@@ -5418,7 +5272,7 @@ index 00000000..547d176f
 +	.WORD 111
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BITE
 +	.WORD 228
-+	.BYTE 3, 9, 0, 24, 4, 3, 7   ; DIAMONDIZING_BITE
++	.BYTE 3, 9, 20, 60, 4, 3, 7   ; DIAMONDIZING_BITE
 +	.BYTE 3   ; enemy 84
 +	.WORD 222
 +	.BYTE 4, 0, 1, 32, 5, 0, 8   ; FIRE_BEAM
@@ -5439,12 +5293,12 @@ index 00000000..547d176f
 +	.WORD 66
 +	.BYTE 10, 8, 2, 6, 20, 17, 11   ; STEAL
 +	.WORD 69
-+	.BYTE 3, 0, 5, 24, 3, 0, 7   ; ELECTRIC_FIELD
++	.BYTE 3, 0, 24, 60, 3, 0, 7   ; ELECTRIC_FIELD
 +	.BYTE 3   ; enemy 87
 +	.WORD 222
 +	.BYTE 4, 0, 2, 48, 5, 0, 8   ; FIRE_BEAM
 +	.WORD 69
-+	.BYTE 3, 0, 2, 12, 3, 0, 7   ; ELECTRIC_FIELD
++	.BYTE 3, 0, 28, 36, 3, 0, 7   ; ELECTRIC_FIELD
 +	.WORD 66
 +	.BYTE 15, 0, 3, 30, 0, 0, 15   ; STEAL
 +	.BYTE 3   ; enemy 88
@@ -5459,11 +5313,11 @@ index 00000000..547d176f
 +	.BYTE 4, 17, 5, 48, 4, 120, 8   ; FREEZE_IN_TIME
 +	.BYTE 5   ; enemy 90
 +	.WORD 4
-+	.BYTE 3, 0, 2, 20, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 28, 52, 5, 0, 7   ; BASH
 +	.WORD 26
 +	.BYTE 16, 11, 3, 14, 1, 56, 16   ; PSI_FLASH_ALPHA
 +	.WORD 56
-+	.BYTE 3, 0, 7, 20, 5, 0, 7   ; PSI_PARALYSIS_ALPHA
++	.BYTE 3, 0, 32, 52, 5, 0, 7   ; PSI_PARALYSIS_ALPHA
 +	.WORD 44
 +	.BYTE 14, 0, 5, 0, 6, 0, 14   ; PSI_PSI_SHIELD_ALPHA
 +	.WORD 68
@@ -5479,7 +5333,7 @@ index 00000000..547d176f
 +	.WORD 238
 +	.BYTE 1, 17, 0, 0, 0, 120, 23   ; BITING_ATTACK
 +	.WORD 100
-+	.BYTE 3, 0, 0, 16, 4, 0, 7   ; POISONOUS_BITE
++	.BYTE 3, 0, 20, 44, 4, 0, 7   ; POISONOUS_BITE
 +	.BYTE 3   ; enemy 93
 +	.WORD 71
 +	.BYTE 16, 0, 3, 10, 1, 0, 16   ; NAUSEATING_BURP
@@ -5489,7 +5343,7 @@ index 00000000..547d176f
 +	.BYTE 14, 0, 5, 0, 6, 0, 14   ; CONTINUOUS_ATTACK
 +	.BYTE 4   ; enemy 94
 +	.WORD 4
-+	.BYTE 3, 0, 4, 20, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 20, 52, 4, 0, 7   ; BASH
 +	.WORD 87
 +	.BYTE 10, 8, 3, 7, 20, 34, 11   ; STINKY_BREATH
 +	.WORD 80
@@ -5531,7 +5385,7 @@ index 00000000..547d176f
 +	.BYTE 15, 0, 3, 24, 0, 0, 15   ; PSI_MAGNET_ALPHA
 +	.BYTE 1   ; enemy 100
 +	.WORD 202
-+	.BYTE 3, 0, 3, 12, 5, 0, 7   ; ELECTRIC_SHOCK
++	.BYTE 3, 0, 32, 36, 5, 0, 7   ; ELECTRIC_SHOCK
 +	.BYTE 3   ; enemy 101
 +	.WORD 4
 +	.BYTE 4, 0, 5, 48, 3, 0, 8   ; BASH
@@ -5554,7 +5408,7 @@ index 00000000..547d176f
 +	.WORD 100
 +	.BYTE 15, 0, 3, 36, 1, 0, 15   ; POISONOUS_BITE
 +	.WORD 228
-+	.BYTE 3, 9, 3, 20, 5, 3, 7   ; DIAMONDIZING_BITE
++	.BYTE 3, 9, 32, 52, 5, 3, 7   ; DIAMONDIZING_BITE
 +	.WORD 160
 +	.BYTE 10, 0, 3, 6, 12, 0, 11   ; SHIELD_KILLER
 +	.WORD 52
@@ -5566,14 +5420,14 @@ index 00000000..547d176f
 +	.BYTE 1, 8, 0, 0, 0, 33, 20   ; WAR_CRY
 +	.BYTE 3   ; enemy 105
 +	.WORD 4
-+	.BYTE 3, 0, 6, 20, 3, 0, 7   ; BASH
++	.BYTE 3, 0, 28, 52, 3, 0, 7   ; BASH
 +	.WORD 234
-+	.BYTE 3, 0, 0, 24, 4, 0, 7   ; WAR_CRY
++	.BYTE 3, 0, 20, 60, 4, 0, 7   ; WAR_CRY
 +	.WORD 226
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; CHARGE
 +	.BYTE 4   ; enemy 106
 +	.WORD 18
-+	.BYTE 3, 0, 0, 12, 4, 0, 7   ; PSI_FREEZE_ALPHA
++	.BYTE 3, 0, 20, 36, 4, 0, 7   ; PSI_FREEZE_ALPHA
 +	.WORD 19
 +	.BYTE 1, 9, 0, 0, 0, 2, 21   ; PSI_FREEZE_BETA
 +	.WORD 52
@@ -5612,9 +5466,9 @@ index 00000000..547d176f
 +	.BYTE 16, 9, 3, 10, 1, 2, 16   ; BITING_ATTACK
 +	.BYTE 2   ; enemy 111
 +	.WORD 4
-+	.BYTE 3, 0, 5, 20, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 52, 5, 0, 7   ; BASH
 +	.WORD 52
-+	.BYTE 3, 17, 0, 20, 5, 120, 7   ; PSI_HYPNOSIS_ALPHA
++	.BYTE 3, 17, 20, 52, 5, 120, 7   ; PSI_HYPNOSIS_ALPHA
 +	.BYTE 3   ; enemy 112
 +	.WORD 4
 +	.BYTE 1, 9, 0, 0, 0, 3, 21   ; BASH
@@ -5637,7 +5491,7 @@ index 00000000..547d176f
 +	.BYTE 16, 9, 5, 14, 1, 1, 16   ; SUPER_BOMB
 +	.BYTE 4   ; enemy 116
 +	.WORD 202
-+	.BYTE 3, 0, 7, 24, 3, 0, 7   ; ELECTRIC_SHOCK
++	.BYTE 3, 0, 32, 60, 3, 0, 7   ; ELECTRIC_SHOCK
 +	.WORD 176
 +	.BYTE 12, 0, 24, 1, 150, 0, 12   ; HUNGRY_HP_SUCKER
 +	.WORD 247
@@ -5665,7 +5519,7 @@ index 00000000..547d176f
 +	.WORD 52
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; PSI_HYPNOSIS_ALPHA
 +	.WORD 56
-+	.BYTE 3, 0, 3, 24, 4, 0, 7   ; PSI_PARALYSIS_ALPHA
++	.BYTE 3, 0, 32, 60, 4, 0, 7   ; PSI_PARALYSIS_ALPHA
 +	.WORD 19
 +	.BYTE 1, 9, 0, 0, 0, 3, 21   ; PSI_FREEZE_BETA
 +	.WORD 39
@@ -5682,14 +5536,14 @@ index 00000000..547d176f
 +	.WORD 233
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; SHOUT
 +	.WORD 116
-+	.BYTE 3, 0, 4, 20, 4, 0, 7   ; SWING_CLUB
++	.BYTE 3, 0, 20, 52, 4, 0, 7   ; SWING_CLUB
 +	.WORD 4
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; BASH
 +	.BYTE 2   ; enemy 124
 +	.WORD 4
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; BASH
 +	.WORD 52
-+	.BYTE 3, 0, 4, 12, 5, 0, 7   ; PSI_HYPNOSIS_ALPHA
++	.BYTE 3, 0, 20, 36, 5, 0, 7   ; PSI_HYPNOSIS_ALPHA
 +	.BYTE 4   ; enemy 125
 +	.WORD 4
 +	.BYTE 4, 0, 5, 48, 3, 0, 8   ; BASH
@@ -5710,25 +5564,25 @@ index 00000000..547d176f
 +	.BYTE 12, 0, 24, 2, 180, 0, 12   ; REACH_WITH_ICY_HAND
 +	.BYTE 3   ; enemy 127
 +	.WORD 110
-+	.BYTE 3, 0, 6, 16, 3, 0, 7   ; TEAR_INTO
++	.BYTE 3, 0, 28, 44, 3, 0, 7   ; TEAR_INTO
 +	.WORD 114
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; LUNGE_FORWARD
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.BYTE 4   ; enemy 128
 +	.WORD 92
-+	.BYTE 3, 8, 7, 24, 3, 33, 7   ; CRASHING_BOOM_BANG
++	.BYTE 3, 8, 32, 60, 3, 33, 7   ; CRASHING_BOOM_BANG
 +	.WORD 105
 +	.BYTE 15, 0, 2, 24, 2, 0, 15   ; INTERTWINE
 +	.WORD 88
 +	.BYTE 4, 0, 0, 32, 3, 0, 8   ; SUMMON_STORM
 +	.WORD 4
-+	.BYTE 3, 0, 5, 12, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 36, 4, 0, 7   ; BASH
 +	.BYTE 2   ; enemy 129
 +	.WORD 225
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; SWING_HULA_HOOP
 +	.WORD 4
-+	.BYTE 3, 0, 0, 24, 3, 0, 7   ; BASH
++	.BYTE 3, 0, 20, 60, 3, 0, 7   ; BASH
 +	.BYTE 2   ; enemy 130
 +	.WORD 220
 +	.BYTE 4, 0, 5, 48, 4, 0, 8   ; PUNCH
@@ -5753,12 +5607,12 @@ index 00000000..547d176f
 +	.BYTE 18, 0, 3, 32, 0, 0, 17   ; PSI_LIFEUP_ALPHA
 +	.BYTE 2   ; enemy 134
 +	.WORD 226
-+	.BYTE 3, 0, 7, 16, 4, 0, 7   ; CHARGE
++	.BYTE 3, 0, 32, 44, 4, 0, 7   ; CHARGE
 +	.WORD 4
 +	.BYTE 14, 0, 5, 0, 8, 0, 14   ; BASH
 +	.BYTE 2   ; enemy 135
 +	.WORD 216
-+	.BYTE 3, 0, 1, 20, 3, 0, 7   ; COME_OUT_SWINGING
++	.BYTE 3, 0, 24, 52, 3, 0, 7   ; COME_OUT_SWINGING
 +	.WORD 96
 +	.BYTE 14, 0, 7, 0, 8, 0, 14   ; LOSE_TEMPER
 +	.BYTE 2   ; enemy 136
@@ -5772,7 +5626,7 @@ index 00000000..547d176f
 +	.WORD 56
 +	.BYTE 4, 11, 3, 32, 3, 48, 8   ; PSI_PARALYSIS_ALPHA
 +	.WORD 4
-+	.BYTE 3, 0, 5, 24, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 60, 5, 0, 7   ; BASH
 +	.WORD 248
 +	.BYTE 14, 0, 4, 0, 6, 0, 14   ; EMIT_PALE_GREEN_LIGHT
 +	.WORD 201
@@ -5783,14 +5637,14 @@ index 00000000..547d176f
 +	.WORD 26
 +	.BYTE 1, 11, 0, 0, 0, 48, 22   ; PSI_FLASH_ALPHA
 +	.WORD 14
-+	.BYTE 3, 0, 3, 20, 4, 0, 7   ; PSI_FIRE_ALPHA
++	.BYTE 3, 0, 32, 52, 4, 0, 7   ; PSI_FIRE_ALPHA
 +	.WORD 18
-+	.BYTE 3, 0, 7, 24, 3, 0, 7   ; PSI_FREEZE_ALPHA
++	.BYTE 3, 0, 32, 60, 3, 0, 7   ; PSI_FREEZE_ALPHA
 +	.BYTE 3   ; enemy 139
 +	.WORD 86
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; SIZE_UP_SITUATION
 +	.WORD 4
-+	.BYTE 3, 0, 0, 16, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 20, 44, 4, 0, 7   ; BASH
 +	.WORD 62
 +	.BYTE 14, 0, 4, 0, 6, 0, 14   ; CALL_FOR_HELP
 +	.BYTE 3   ; enemy 140
@@ -5799,16 +5653,16 @@ index 00000000..547d176f
 +	.WORD 62
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; CALL_FOR_HELP
 +	.WORD 163
-+	.BYTE 3, 0, 0, 16, 5, 0, 7   ; BOTTLE_ROCKET
++	.BYTE 3, 0, 20, 44, 5, 0, 7   ; BOTTLE_ROCKET
 +	.BYTE 5   ; enemy 141
 +	.WORD 4
-+	.BYTE 3, 0, 7, 20, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 32, 52, 5, 0, 7   ; BASH
 +	.WORD 15
 +	.BYTE 4, 0, 0, 32, 4, 0, 8   ; PSI_FIRE_BETA
 +	.WORD 273
 +	.BYTE 4, 11, 1, 48, 3, 40, 8   ; DISCHARGE_STINKY_GAS
 +	.WORD 226
-+	.BYTE 3, 0, 7, 20, 4, 0, 7   ; CHARGE
++	.BYTE 3, 0, 32, 52, 4, 0, 7   ; CHARGE
 +	.WORD 110
 +	.BYTE 15, 0, 4, 30, 2, 0, 15   ; TEAR_INTO
 +	.BYTE 2   ; enemy 142
@@ -5827,11 +5681,11 @@ index 00000000..547d176f
 +	.BYTE 4, 0, 2, 48, 3, 0, 8   ; PSI_FIRE_GAMMA
 +	.BYTE 3   ; enemy 144
 +	.WORD 217
-+	.BYTE 3, 0, 4, 16, 4, 0, 7   ; SCRATCH
++	.BYTE 3, 0, 20, 44, 4, 0, 7   ; SCRATCH
 +	.WORD 86
 +	.BYTE 14, 0, 5, 0, 8, 0, 14   ; SIZE_UP_SITUATION
 +	.WORD 112
-+	.BYTE 3, 0, 3, 20, 3, 0, 7   ; CLAW
++	.BYTE 3, 0, 32, 52, 3, 0, 7   ; CLAW
 +	.BYTE 2   ; enemy 145
 +	.WORD 219
 +	.BYTE 4, 0, 3, 32, 3, 0, 8   ; TRAMPLE
@@ -5865,7 +5719,7 @@ index 00000000..547d176f
 +	.WORD 222
 +	.BYTE 4, 0, 1, 32, 3, 0, 8   ; FIRE_BEAM
 +	.WORD 241
-+	.BYTE 3, 17, 0, 16, 4, 60, 7   ; NIGHT_TIME_STUFFINESS_BEAM
++	.BYTE 3, 17, 20, 44, 4, 60, 7   ; NIGHT_TIME_STUFFINESS_BEAM
 +	.BYTE 3   ; enemy 151
 +	.WORD 222
 +	.BYTE 4, 0, 4, 48, 5, 0, 8   ; FIRE_BEAM
@@ -5875,7 +5729,7 @@ index 00000000..547d176f
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; PSI_PSI_SHIELD_ALPHA
 +	.BYTE 2   ; enemy 152
 +	.WORD 4
-+	.BYTE 3, 8, 3, 16, 5, 18, 7   ; BASH
++	.BYTE 3, 8, 32, 44, 5, 18, 7   ; BASH
 +	.WORD 79
 +	.BYTE 4, 0, 3, 32, 4, 0, 8   ; BINDING_ATTACK
 +	.BYTE 2   ; enemy 153
@@ -5899,7 +5753,7 @@ index 00000000..547d176f
 +	.BYTE 4, 0, 5, 32, 5, 0, 8   ; SWING_TAIL
 +	.BYTE 3   ; enemy 156
 +	.WORD 4
-+	.BYTE 3, 9, 5, 24, 5, 2, 7   ; BASH
++	.BYTE 3, 9, 24, 60, 5, 2, 7   ; BASH
 +	.WORD 111
 +	.BYTE 1, 9, 0, 0, 0, 3, 21   ; BITE
 +	.WORD 113
@@ -5954,14 +5808,14 @@ index 00000000..547d176f
 +	.BYTE 14, 0, 4, 0, 6, 0, 14   ; CONTINUOUS_ATTACK
 +	.BYTE 2   ; enemy 170
 +	.WORD 215
-+	.BYTE 3, 0, 4, 20, 3, 0, 7   ; PAINT_ATTACK
++	.BYTE 3, 0, 20, 52, 3, 0, 7   ; PAINT_ATTACK
 +	.WORD 62
 +	.BYTE 13, 0, 3, 28, 1, 0, 13   ; CALL_FOR_HELP
 +	.BYTE 5   ; enemy 171
 +	.WORD 18
 +	.BYTE 1, 9, 0, 0, 0, 3, 21   ; PSI_FREEZE_ALPHA
 +	.WORD 14
-+	.BYTE 3, 0, 6, 24, 3, 0, 7   ; PSI_FIRE_ALPHA
++	.BYTE 3, 0, 28, 60, 3, 0, 7   ; PSI_FIRE_ALPHA
 +	.WORD 32
 +	.BYTE 10, 0, 3, 5, 16, 0, 11   ; PSI_LIFEUP_ALPHA
 +	.WORD 55
@@ -5970,7 +5824,7 @@ index 00000000..547d176f
 +	.BYTE 1, 7, 0, 0, 0, 2, 19   ; PSI_BRAINSHOCK_ALPHA
 +	.BYTE 5   ; enemy 172
 +	.WORD 10
-+	.BYTE 3, 17, 0, 20, 4, 90, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 17, 20, 52, 4, 90, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 201
 +	.BYTE 1, 11, 0, 0, 0, 56, 22   ; GLORIOUS_LIGHT
 +	.WORD 41
@@ -5978,10 +5832,10 @@ index 00000000..547d176f
 +	.WORD 33
 +	.BYTE 18, 0, 5, 32, 0, 0, 17   ; PSI_LIFEUP_BETA
 +	.WORD 13
-+	.BYTE 3, 20, 7, 24, 3, 1, 7   ; PSI_ROCKIN_OMEGA
++	.BYTE 3, 20, 32, 60, 3, 1, 7   ; PSI_ROCKIN_OMEGA
 +	.BYTE 4   ; enemy 173
 +	.WORD 92
-+	.BYTE 3, 0, 6, 20, 4, 0, 7   ; CRASHING_BOOM_BANG
++	.BYTE 3, 0, 28, 52, 4, 0, 7   ; CRASHING_BOOM_BANG
 +	.WORD 32
 +	.BYTE 2, 0, 0, 0, 0, 0, 2   ; PSI_LIFEUP_ALPHA
 +	.WORD 215
@@ -5992,7 +5846,7 @@ index 00000000..547d176f
 +	.WORD 104
 +	.BYTE 5, 0, 3, 14, 50, 0, 9   ; SPEW_FIREBALL
 +	.WORD 238
-+	.BYTE 3, 0, 7, 20, 3, 0, 7   ; BITING_ATTACK
++	.BYTE 3, 0, 32, 52, 3, 0, 7   ; BITING_ATTACK
 +	.WORD 93
 +	.BYTE 4, 0, 5, 48, 5, 0, 8   ; FIRE_SPRAY
 +	.WORD 226
@@ -6001,7 +5855,7 @@ index 00000000..547d176f
 +	.WORD 14
 +	.BYTE 4, 0, 1, 48, 3, 0, 8   ; PSI_FIRE_ALPHA
 +	.WORD 15
-+	.BYTE 3, 0, 5, 20, 5, 0, 7   ; PSI_FIRE_BETA
++	.BYTE 3, 0, 24, 52, 5, 0, 7   ; PSI_FIRE_BETA
 +	.WORD 113
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; SWING_TAIL
 +	.WORD 224
@@ -6023,11 +5877,11 @@ index 00000000..547d176f
 +	.WORD 54
 +	.BYTE 10, 0, 4, 5, 20, 0, 11   ; PSI_MAGNET_ALPHA
 +	.WORD 72
-+	.BYTE 3, 0, 2, 24, 3, 0, 7   ; POISON_STING
++	.BYTE 3, 0, 28, 60, 3, 0, 7   ; POISON_STING
 +	.WORD 238
 +	.BYTE 15, 0, 4, 30, 1, 0, 15   ; BITING_ATTACK
 +	.WORD 56
-+	.BYTE 3, 0, 1, 24, 4, 0, 7   ; PSI_PARALYSIS_ALPHA
++	.BYTE 3, 0, 24, 60, 4, 0, 7   ; PSI_PARALYSIS_ALPHA
 +	.WORD 62
 +	.BYTE 18, 0, 4, 26, 1, 0, 17   ; CALL_FOR_HELP
 +	.BYTE 5   ; enemy 178
@@ -6038,12 +5892,12 @@ index 00000000..547d176f
 +	.WORD 237
 +	.BYTE 1, 8, 0, 0, 0, 17, 20   ; SCATTER_SPORES_2
 +	.WORD 4
-+	.BYTE 3, 0, 6, 12, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 28, 36, 5, 0, 7   ; BASH
 +	.WORD 85
 +	.BYTE 1, 7, 0, 0, 0, 2, 19   ; DISRUPT_SENSES
 +	.BYTE 3   ; enemy 179
 +	.WORD 100
-+	.BYTE 3, 0, 2, 12, 5, 0, 7   ; POISONOUS_BITE
++	.BYTE 3, 0, 28, 36, 5, 0, 7   ; POISONOUS_BITE
 +	.WORD 111
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BITE
 +	.WORD 4
@@ -6052,7 +5906,7 @@ index 00000000..547d176f
 +	.WORD 32
 +	.BYTE 16, 0, 4, 18, 2, 0, 16   ; PSI_LIFEUP_ALPHA
 +	.WORD 110
-+	.BYTE 3, 0, 7, 12, 3, 0, 7   ; TEAR_INTO
++	.BYTE 3, 0, 32, 36, 3, 0, 7   ; TEAR_INTO
 +	.WORD 4
 +	.BYTE 4, 0, 5, 48, 5, 0, 8   ; BASH
 +	.WORD 44
@@ -6063,13 +5917,13 @@ index 00000000..547d176f
 +	.BYTE 4, 0, 3, 32, 5, 0, 8   ; CLAW
 +	.BYTE 5   ; enemy 181
 +	.WORD 112
-+	.BYTE 3, 0, 0, 12, 5, 0, 7   ; CLAW
++	.BYTE 3, 0, 20, 36, 5, 0, 7   ; CLAW
 +	.WORD 4
 +	.BYTE 1, 11, 0, 0, 0, 40, 22   ; BASH
 +	.WORD 41
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; PSI_SHIELD_BETA
 +	.WORD 110
-+	.BYTE 3, 0, 3, 20, 5, 0, 7   ; TEAR_INTO
++	.BYTE 3, 0, 32, 52, 5, 0, 7   ; TEAR_INTO
 +	.WORD 32
 +	.BYTE 10, 0, 4, 7, 16, 0, 11   ; PSI_LIFEUP_ALPHA
 +	.BYTE 5   ; enemy 182
@@ -6087,7 +5941,7 @@ index 00000000..547d176f
 +	.WORD 117
 +	.BYTE 1, 8, 0, 0, 0, 17, 20   ; GENERATE_TORNADO
 +	.WORD 92
-+	.BYTE 3, 0, 7, 20, 4, 0, 7   ; CRASHING_BOOM_BANG
++	.BYTE 3, 0, 32, 52, 4, 0, 7   ; CRASHING_BOOM_BANG
 +	.WORD 94
 +	.BYTE 4, 0, 4, 32, 4, 0, 8   ; FIRE_BREATH
 +	.WORD 248
@@ -6119,7 +5973,7 @@ index 00000000..547d176f
 +	.WORD 222
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; FIRE_BEAM
 +	.WORD 30
-+	.BYTE 3, 0, 1, 20, 5, 0, 7   ; PSI_STARSTORM_ALPHA
++	.BYTE 3, 0, 24, 52, 5, 0, 7   ; PSI_STARSTORM_ALPHA
 +	.WORD 62
 +	.BYTE 16, 0, 3, 14, 1, 0, 16   ; CALL_FOR_HELP
 +	.WORD 45
@@ -6130,7 +5984,7 @@ index 00000000..547d176f
 +	.WORD 59
 +	.BYTE 1, 7, 0, 0, 0, 0, 19   ; PSI_BRAINSHOCK_OMEGA
 +	.WORD 30
-+	.BYTE 3, 0, 5, 16, 5, 0, 7   ; PSI_STARSTORM_ALPHA
++	.BYTE 3, 0, 24, 44, 5, 0, 7   ; PSI_STARSTORM_ALPHA
 +	.WORD 31
 +	.BYTE 1, 9, 0, 0, 0, 3, 21   ; PSI_STARSTORM_OMEGA
 +	.WORD 39
@@ -6139,7 +5993,7 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 14, 0, 7, 0, 8, 0, 14   ; BASH
 +	.WORD 74
-+	.BYTE 3, 8, 5, 12, 5, 17, 7   ; COLD_BREATH
++	.BYTE 3, 8, 24, 36, 5, 17, 7   ; COLD_BREATH
 +	.WORD 84
 +	.BYTE 1, 7, 0, 0, 0, 3, 19   ; SOMETHING_MYSTERIOUS
 +	.BYTE 5   ; enemy 190
@@ -6152,14 +6006,14 @@ index 00000000..547d176f
 +	.WORD 111
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BITE
 +	.WORD 228
-+	.BYTE 3, 9, 3, 12, 3, 3, 7   ; DIAMONDIZING_BITE
++	.BYTE 3, 9, 32, 36, 3, 3, 7   ; DIAMONDIZING_BITE
 +	.BYTE 5   ; enemy 191
 +	.WORD 4
-+	.BYTE 3, 0, 1, 16, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 44, 4, 0, 7   ; BASH
 +	.WORD 26
 +	.BYTE 16, 11, 3, 14, 1, 56, 16   ; PSI_FLASH_ALPHA
 +	.WORD 56
-+	.BYTE 3, 0, 5, 12, 3, 0, 7   ; PSI_PARALYSIS_ALPHA
++	.BYTE 3, 0, 24, 36, 3, 0, 7   ; PSI_PARALYSIS_ALPHA
 +	.WORD 44
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; PSI_PSI_SHIELD_ALPHA
 +	.WORD 68
@@ -6173,7 +6027,7 @@ index 00000000..547d176f
 +	.BYTE 14, 0, 6, 0, 6, 0, 14   ; CONTINUOUS_ATTACK
 +	.BYTE 4   ; enemy 193
 +	.WORD 4
-+	.BYTE 3, 0, 2, 12, 3, 0, 7   ; BASH
++	.BYTE 3, 0, 28, 36, 3, 0, 7   ; BASH
 +	.WORD 87
 +	.BYTE 10, 8, 3, 6, 12, 33, 11   ; STINKY_BREATH
 +	.WORD 80
@@ -6214,7 +6068,7 @@ index 00000000..547d176f
 +	.WORD 100
 +	.BYTE 15, 0, 3, 30, 0, 0, 15   ; POISONOUS_BITE
 +	.WORD 228
-+	.BYTE 3, 9, 4, 16, 3, 1, 7   ; DIAMONDIZING_BITE
++	.BYTE 3, 9, 20, 44, 3, 1, 7   ; DIAMONDIZING_BITE
 +	.WORD 160
 +	.BYTE 10, 0, 2, 4, 16, 0, 11   ; SHIELD_KILLER
 +	.WORD 52
@@ -6228,7 +6082,7 @@ index 00000000..547d176f
 +	.BYTE 16, 9, 3, 18, 2, 3, 16   ; BITING_ATTACK
 +	.BYTE 4   ; enemy 200
 +	.WORD 202
-+	.BYTE 3, 0, 7, 24, 4, 0, 7   ; ELECTRIC_SHOCK
++	.BYTE 3, 0, 32, 60, 4, 0, 7   ; ELECTRIC_SHOCK
 +	.WORD 176
 +	.BYTE 12, 0, 32, 1, 180, 0, 12   ; HUNGRY_HP_SUCKER
 +	.WORD 247
@@ -6237,13 +6091,13 @@ index 00000000..547d176f
 +	.BYTE 6, 0, 3, 9, 0, 0, 10   ; SHIELD_KILLER
 +	.BYTE 4   ; enemy 201
 +	.WORD 92
-+	.BYTE 3, 8, 3, 16, 4, 34, 7   ; CRASHING_BOOM_BANG
++	.BYTE 3, 8, 32, 44, 4, 34, 7   ; CRASHING_BOOM_BANG
 +	.WORD 105
 +	.BYTE 15, 0, 2, 24, 3, 0, 15   ; INTERTWINE
 +	.WORD 88
 +	.BYTE 4, 0, 1, 32, 3, 0, 8   ; SUMMON_STORM
 +	.WORD 4
-+	.BYTE 3, 0, 0, 16, 3, 0, 7   ; BASH
++	.BYTE 3, 0, 20, 44, 3, 0, 7   ; BASH
 +	.BYTE 2   ; enemy 202
 +	.WORD 220
 +	.BYTE 4, 0, 1, 48, 5, 0, 8   ; PUNCH
@@ -6255,20 +6109,20 @@ index 00000000..547d176f
 +	.WORD 56
 +	.BYTE 4, 11, 1, 32, 3, 48, 8   ; PSI_PARALYSIS_ALPHA
 +	.WORD 4
-+	.BYTE 3, 0, 1, 20, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 52, 4, 0, 7   ; BASH
 +	.WORD 248
 +	.BYTE 14, 0, 5, 0, 8, 0, 14   ; EMIT_PALE_GREEN_LIGHT
 +	.WORD 201
 +	.BYTE 4, 0, 1, 32, 5, 0, 8   ; GLORIOUS_LIGHT
 +	.BYTE 5   ; enemy 204
 +	.WORD 4
-+	.BYTE 3, 0, 7, 20, 5, 0, 7   ; BASH
++	.BYTE 3, 0, 32, 52, 5, 0, 7   ; BASH
 +	.WORD 15
 +	.BYTE 4, 0, 1, 32, 5, 0, 8   ; PSI_FIRE_BETA
 +	.WORD 273
 +	.BYTE 4, 11, 0, 48, 3, 40, 8   ; DISCHARGE_STINKY_GAS
 +	.WORD 226
-+	.BYTE 3, 0, 1, 16, 3, 0, 7   ; CHARGE
++	.BYTE 3, 0, 24, 44, 3, 0, 7   ; CHARGE
 +	.WORD 110
 +	.BYTE 15, 0, 2, 24, 0, 0, 15   ; TEAR_INTO
 +	.BYTE 2   ; enemy 205
@@ -6308,7 +6162,7 @@ index 00000000..547d176f
 +	.BYTE 14, 0, 7, 0, 8, 0, 14   ; PSI_LIFEUP_ALPHA
 +	.BYTE 3   ; enemy 210
 +	.WORD 75
-+	.BYTE 3, 0, 3, 12, 3, 0, 7   ; SCATTER_SPORES
++	.BYTE 3, 0, 32, 36, 3, 0, 7   ; SCATTER_SPORES
 +	.WORD 4
 +	.BYTE 14, 17, 5, 0, 6, 120, 14   ; BASH
 +	.WORD 237
@@ -6322,7 +6176,7 @@ index 00000000..547d176f
 +	.WORD 233
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; SHOUT
 +	.WORD 116
-+	.BYTE 3, 0, 6, 24, 3, 0, 7   ; SWING_CLUB
++	.BYTE 3, 0, 28, 60, 3, 0, 7   ; SWING_CLUB
 +	.WORD 4
 +	.BYTE 14, 0, 4, 0, 6, 0, 14   ; BASH
 +	.BYTE 2   ; enemy 213
@@ -6346,37 +6200,37 @@ index 00000000..547d176f
 +	.BYTE 12, 0, 24, 2, 150, 0, 12   ; BASH
 +	.BYTE 5   ; enemy 216
 +	.WORD 4
-+	.BYTE 3, 0, 0, 16, 4, 0, 7   ; BASH
++	.BYTE 3, 0, 20, 44, 4, 0, 7   ; BASH
 +	.WORD 15
 +	.BYTE 4, 0, 3, 32, 3, 0, 8   ; PSI_FIRE_BETA
 +	.WORD 273
 +	.BYTE 4, 11, 4, 32, 3, 40, 8   ; DISCHARGE_STINKY_GAS
 +	.WORD 226
-+	.BYTE 3, 0, 5, 20, 5, 0, 7   ; CHARGE
++	.BYTE 3, 0, 24, 52, 5, 0, 7   ; CHARGE
 +	.WORD 110
 +	.BYTE 15, 0, 3, 36, 2, 0, 15   ; TEAR_INTO
 +	.BYTE 5   ; enemy 217
 +	.WORD 4
-+	.BYTE 3, 0, 5, 16, 3, 0, 7   ; BASH
++	.BYTE 3, 0, 24, 44, 3, 0, 7   ; BASH
 +	.WORD 15
 +	.BYTE 4, 0, 3, 48, 4, 0, 8   ; PSI_FIRE_BETA
 +	.WORD 273
 +	.BYTE 4, 11, 5, 32, 5, 48, 8   ; DISCHARGE_STINKY_GAS
 +	.WORD 226
-+	.BYTE 3, 0, 6, 20, 3, 0, 7   ; CHARGE
++	.BYTE 3, 0, 28, 52, 3, 0, 7   ; CHARGE
 +	.WORD 110
 +	.BYTE 15, 0, 3, 30, 2, 0, 15   ; TEAR_INTO
 +	.BYTE 12   ; enemy 218
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 3, 12, 3, 50, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 32, 36, 3, 50, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 1, 20, 4, 48, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 24, 52, 4, 48, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 1, 12, 3, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 36, 3, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 1, 12, 5, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 24, 36, 5, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 18, 1, 56, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6395,13 +6249,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 7, 24, 4, 49, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 32, 60, 4, 49, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 4, 12, 4, 17, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 20, 36, 4, 17, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 5, 20, 4, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 52, 4, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 3, 20, 4, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 32, 52, 4, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 5, 18, 2, 40, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6420,13 +6274,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 5, 20, 3, 19, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 24, 52, 3, 19, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 3, 12, 5, 49, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 32, 36, 5, 49, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 1, 20, 4, 56, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 52, 4, 56, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 7, 24, 4, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 32, 60, 4, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 3, 10, 2, 56, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6445,13 +6299,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 4, 24, 3, 49, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 20, 60, 3, 49, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 0, 24, 4, 51, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 20, 60, 4, 51, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 6, 16, 4, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 28, 44, 4, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 3, 12, 5, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 32, 36, 5, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 14, 1, 56, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6470,13 +6324,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 1, 20, 4, 32, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 24, 52, 4, 32, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 5, 20, 3, 50, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 24, 52, 3, 50, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 3, 24, 4, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 32, 60, 4, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 6, 24, 3, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 28, 60, 3, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 18, 2, 40, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6492,20 +6346,20 @@ index 00000000..547d176f
 +	.WORD 307
 +	.BYTE 16, 7, 3, 14, 2, 3, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA_UNSTABLE
 +	.WORD 74
-+	.BYTE 3, 0, 6, 12, 5, 0, 7   ; COLD_BREATH
++	.BYTE 3, 0, 28, 36, 5, 0, 7   ; COLD_BREATH
 +	.WORD 84
 +	.BYTE 16, 0, 5, 14, 1, 0, 16   ; SOMETHING_MYSTERIOUS
 +	.BYTE 13   ; enemy 223
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 6, 16, 5, 17, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 28, 44, 5, 17, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 7, 16, 5, 19, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 32, 44, 5, 19, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 5, 12, 3, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 36, 3, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 7, 12, 4, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 32, 36, 4, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 14, 1, 40, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6526,13 +6380,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 1, 20, 3, 33, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 24, 52, 3, 33, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 3, 12, 4, 48, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 32, 36, 4, 48, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 1, 20, 4, 56, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 52, 4, 56, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 1, 12, 3, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 24, 36, 3, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 5, 14, 2, 48, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6557,13 +6411,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 3, 24, 5, 17, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 32, 60, 5, 17, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 0, 16, 3, 32, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 20, 44, 3, 32, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 0, 20, 3, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 20, 52, 3, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 4, 12, 4, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 20, 36, 4, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 5, 10, 1, 40, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6582,13 +6436,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 0, 16, 5, 35, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 20, 44, 5, 35, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 2, 20, 5, 19, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 28, 52, 5, 19, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 0, 16, 4, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 20, 44, 4, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 0, 12, 4, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 20, 36, 4, 60, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 3, 14, 2, 56, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6608,18 +6462,18 @@ index 00000000..547d176f
 +	.WORD 232
 +	.BYTE 4, 8, 0, 48, 4, 48, 8   ; VENT_ODOR
 +	.WORD 80
-+	.BYTE 3, 0, 4, 20, 5, 0, 7   ; STICKY_MUCUS
++	.BYTE 3, 0, 20, 52, 5, 0, 7   ; STICKY_MUCUS
 +	.BYTE 14   ; enemy 227
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 1, 12, 4, 48, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 24, 36, 4, 48, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 0, 16, 3, 49, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 20, 44, 3, 49, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 5, 24, 5, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 24, 60, 5, 48, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 1, 20, 3, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 24, 52, 3, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 10, 2, 48, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6642,13 +6496,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 5, 16, 5, 34, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 24, 44, 5, 34, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 5, 24, 3, 19, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 24, 60, 3, 19, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 2, 16, 3, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 28, 44, 3, 40, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 3, 16, 5, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 32, 44, 5, 120, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 3, 18, 2, 56, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -6673,13 +6527,13 @@ index 00000000..547d176f
 +	.WORD 4
 +	.BYTE 1, 0, 0, 0, 0, 0, 6   ; BASH
 +	.WORD 10
-+	.BYTE 3, 8, 5, 24, 5, 35, 7   ; PSI_ROCKIN_ALPHA
++	.BYTE 3, 8, 24, 60, 5, 35, 7   ; PSI_ROCKIN_ALPHA
 +	.WORD 11
-+	.BYTE 3, 8, 4, 12, 5, 32, 7   ; PSI_ROCKIN_BETA
++	.BYTE 3, 8, 20, 36, 5, 32, 7   ; PSI_ROCKIN_BETA
 +	.WORD 274
-+	.BYTE 3, 11, 4, 12, 4, 56, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
++	.BYTE 3, 11, 20, 36, 4, 56, 7   ; INCOMPREHENSIBLE_ATTACK_THUNDER_BETA
 +	.WORD 300
-+	.BYTE 3, 17, 5, 16, 3, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
++	.BYTE 3, 17, 24, 44, 3, 90, 7   ; INCOMPREHENSIBLE_ATTACK_FREEZE_ALPHA
 +	.WORD 301
 +	.BYTE 16, 11, 4, 18, 1, 40, 16   ; INCOMPREHENSIBLE_ATTACK_FLASH_GAMMA
 +	.WORD 302
@@ -14335,10 +14189,10 @@ index 00000000..018e0422
 +
 diff --git a/src/battle/bullet_hell/bh_engine.asm b/src/battle/bullet_hell/bh_engine.asm
 new file mode 100644
-index 00000000..461ed9f7
+index 00000000..5bfc30e0
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_engine.asm
-@@ -0,0 +1,3194 @@
+@@ -0,0 +1,3195 @@
 +; ---------------------------------------------------------------------------
 +; Bullet-hell (Undertale-style) dodge phase for EarthBound.
 +;
@@ -17148,10 +17002,11 @@ index 00000000..461ed9f7
 +@content:
 +	LDA z:BH_MODE
 +	BEQ @dodge
++	JSR BH_DRAW_HINT        ; first: the instruction line stays in front of the game's sprites
++	LDA z:BH_MODE
 +	ASL
 +	TAX
 +	JSR (.LOWORD(BH_RENDER_TABLE),X)   ; gauge, rhythm, focus, mash, slots, combo
-+	JSR BH_DRAW_HINT
 +	JSR BH_DRAW_BORDER_IF_NEEDED
 +	JMP @done
 +@dodge:
@@ -17172,6 +17027,7 @@ index 00000000..461ed9f7
 +	STA z:BH_T4
 +	JSR BH_OAM_PUT
 +@noheart:
++	JSR BH_DRAW_HINT        ; behind the heart, in front of the bullets
 +	; bullets (those outside the spotlight, when one is in force, are skipped by BH_OAM_PUT)
 +	LDA #1
 +	STA BH_AG_STATE + BHAG_LIGHT
@@ -17208,7 +17064,6 @@ index 00000000..461ed9f7
 +	BCC @bullet
 +	STZ BH_AG_STATE + BHAG_LIGHT
 +	JSR BH_AG_MOD_RENDER
-+	JSR BH_DRAW_HINT
 +	JSR BH_DRAW_BORDER_IF_NEEDED
 +@done:
 +	BH_LEAVE
@@ -17535,7 +17390,7 @@ index 00000000..461ed9f7
 +	RTS
 diff --git a/src/battle/bullet_hell/bh_hint_table.asm b/src/battle/bullet_hell/bh_hint_table.asm
 new file mode 100644
-index 00000000..bd900d03
+index 00000000..450c3470
 --- /dev/null
 +++ b/src/battle/bullet_hell/bh_hint_table.asm
 @@ -0,0 +1,27 @@
@@ -17548,7 +17403,7 @@ index 00000000..bd900d03
 +	.BYTE 9	; PRESS A TO STOP EACH REEL
 +	.BYTE 8	; HIT THE BUTTONS IN ORDER
 +	.BYTE 6	; DODGE THE BULLETS
-+	.BYTE 8	; STAY OFF THE LIT CELLS
++	.BYTE 7	; HOP THE WAVES WITH A
 +	.BYTE 7	; SLIP THROUGH THE GAPS
 +	.BYTE 8	; HOLD A RELEASE IN GREEN
 +	.BYTE 9	; PRESS THE ARROWS IN ORDER

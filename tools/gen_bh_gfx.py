@@ -487,7 +487,7 @@ HINTS = [
     "PRESS A TO STOP EACH REEL",   # 4 slots
     "HIT THE BUTTONS IN ORDER",    # 5 combo
     "DODGE THE BULLETS",           # 6 dodge box
-    "STAY OFF THE LIT CELLS",      # 7  B3 danger cells
+    "HOP THE WAVES WITH A",        # 7  B3 hop the waves
     "SLIP THROUGH THE GAPS",       # 8  B4 sweeps
     "HOLD A RELEASE IN GREEN",     # 9  B5 hold and release
     "PRESS THE ARROWS IN ORDER",   # 10 B6 arrow chain

@@ -13,42 +13,31 @@ poke BATTLERS_TABLE+641 1E 00 1E 00
 poke BH_DP+0x9C 9
 poke BH_AG_STATE+7 03
 spam2 a 40 3000 BH_DP 1 BH_DP+0x52 7
-run 40
-shot ag3_0
-peek BH_AG_STATE 30
-run 22
+poke BH_AG_STATE+44 5A 00
+waitmem BH_AG_STATE+22 90 400
+run 50
 press a 3
-run 3
-shot ag3_1
-run 22
+run 12
+shot ag3t_1
+peek BH_AG_STATE+8 8
+waitmem BH_AG_STATE+22 90 400
+run 50
 press a 3
-run 3
-shot ag3_2
-run 22
+run 12
+shot ag3t_2
+peek BH_AG_STATE+8 8
+waitmem BH_AG_STATE+22 90 400
+run 50
 press a 3
-run 3
-shot ag3_3
-run 22
+run 12
+shot ag3t_3
+peek BH_AG_STATE+8 8
+waitmem BH_AG_STATE+22 90 400
+run 50
 press a 3
-run 3
-shot ag3_4
-run 22
-press a 3
-run 3
-shot ag3_5
-run 22
-press a 3
-run 3
-shot ag3_6
-run 22
-press a 3
-run 3
-shot ag3_7
-run 22
-press a 3
-run 3
-shot ag3_8
-peek BH_AG_STATE 30
+run 12
+shot ag3t_4
+peek BH_AG_STATE+8 8
 waitmem BH_DP 0 1500
 peek BH_DP+0x0A 2
 peek BH_DP+0x3E 2

@@ -18,7 +18,7 @@ hacked one. No ROM is distributed here; you need your own copy.
 | | size | SHA-1 |
 |---|---|---|
 | input: `EarthBound (USA).sfc`, No-Intro, no copier header | 3,145,728 bytes | `d67a8ef36ef616bc39306aa1b486e1bd3047815a` |
-| output: patched ROM | 4,194,304 bytes | `23f1e2a35ad6ee6aeb6191b00569043cd46ca798` |
+| output: patched ROM | 4,194,304 bytes | `649fcc785ceae1eb49409ae16670953a3501f7cd` |
 
 Apply it with any IPS patcher: [Flips](https://github.com/Alcaro/Flips) (`flips --apply`,
 or drag and drop), Lunar IPS on Windows, or a browser patcher such as
@@ -169,7 +169,7 @@ With **Per attack**, each enemy attack plays a game built for that enemy and tha
 attack instead of the random dodge box or timed block: a Spiteful Crow's peck comes
 at the heart from one side and you hold the d-pad toward it, its "eyes" attack drifts
 crows and green blocks through the box, Master Belch's slime closes the walls in, a
-Territorial Oak's flames light danger cells, a hypnosis attack scrambles the d-pad
+stomp sends waves along the floor to hop over, a hypnosis attack scrambles the d-pad
 for one dodge box, a tempo attack asks for presses on the beat. The design table with
 every one of the 537 enemy-attack pairs is `docs/attack_minigames.md`; it composes
 them from twenty building blocks:
@@ -178,7 +178,7 @@ them from twenty building blocks:
 |---|---|---|---|
 | 1 dodge box | the enemy's own bullet pattern | 11 spotlight * | bullets show only near the heart |
 | 2 timed block | the four brackets | 12 wiggle | alternate Left/Right to fill a meter |
-| 3 danger cells | cells warn, then strike | 13 counter shot | press A as the sprite crosses the crosshair |
+| 3 hop the waves | A hops the heart over waves along the floor | 13 counter shot | press A as the sprite crosses the crosshair |
 | 4 sweeps | full-width bars with a gap | 14 beat | press A on the tick |
 | 5 hold and release | let go of A inside the green | 15 face it | hold the d-pad toward the strike |
 | 6 arrow chain | press the arrows in order | 16 pick a cell | be in the safe cell at the reveal |
@@ -230,6 +230,11 @@ modifier (`test_ag_option*.txt` check the option itself).
 
 ### 2026-09-06
 
+- The "stay off the lit cells" game (block 3) is replaced by "hop the waves": the
+  heart runs along the floor of the box and A hops it over the waves (the enemy's
+  shape) that sweep in from either side; speed, spacing and count come from the
+  attack's row. Every instruction line is now drawn in front of the game's sprites
+  (behind the heart in the dodge box) so bullets, bars and cells never hide it.
 - Bullet shapes follow the enemy's theme: a library of about 150 white shapes and 80
   themes (crows throw feathers and beaks, dogs bones and paws, robots gears and
   bolts, ghosts wisps and skulls, cops badges, punks skateboards...), matched by
